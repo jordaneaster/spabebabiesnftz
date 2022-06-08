@@ -160,20 +160,20 @@ const Text = styled.span`
   }
 `;
 
-const RoadMapItem = ({ title,subtext,subtext1,subtext2,subtext3,subtext4,subtext5,subtext6, addToRef }) => {
+const RoadMapItem = ({ title, subtext, subtext1, subtext2, subtext3, subtext4, subtext5, subtext6, addToRef }) => {
   return (
     <Item ref={addToRef}>
       <ItemContainer>
         <Box>
           <SubTitle>{title} </SubTitle>
           <Text>{subtext}</Text>
-          <Text style={{fontWeight:"bold", color:'yellow'}}>{subtext1}</Text>
+          <Text style={{ fontWeight: "bold", color: 'yellow' }}>{subtext1}</Text>
           <Text>{subtext2}</Text>
-          <Text style={{fontWeight:"bold", color:'yellow'}}>{subtext3}</Text>
+          <Text style={{ fontWeight: "bold", color: 'yellow' }}>{subtext3}</Text>
           <Text>{subtext4}</Text>
-          <Text style={{fontWeight:"bold", color:'yellow'}}>{subtext5}</Text>
+          <Text style={{ fontWeight: "bold", color: 'yellow' }}>{subtext5}</Text>
           <Text>{subtext6}</Text>
-          
+
         </Box>
       </ItemContainer>
     </Item>
@@ -239,7 +239,7 @@ const Roadmap = () => {
             subtext5="Gaurdianz Landing:"
             subtext6="Holder's section of our website complete, Motion and print comic books and short stories released, The 2nd batch of mints will be included in these stories."
           >
-            
+
           </RoadMapItem>
           <RoadMapItem
             addToRef={addToRefs}
@@ -260,8 +260,8 @@ const Roadmap = () => {
             subtext2="3D Evolution and Special Edition NFTZ"
             subtext3="Space Babiez University:"
             subtext4="Enrollment, Fraternities, Metaverse of Space Babiez"
-            subtext6="Contribution and collaboration in the Education Sector"/>
-        
+            subtext6="Contribution and collaboration in the Education Sector" />
+
         </Items>
       </Container>
     </Section>

@@ -16,28 +16,30 @@ const Title = styled.h2`
 
   span {
     text-transform: uppercase;
-    font-family: DIN Condensed dark;
+    font-family: elza-narrow,sans-serif; font-weight: 900; font-style: italic;
   }
   .text-1{
-      color: #aeff00 ;
+      color: #9bff00;   
   }
   .text-2{
-      color: #aeff00 ;
+    color: #5f39ff;
   }
   .text-3{
-      color: #aeff00 ;
+    color: #e00074;
   }
 
   @media (max-width: 70em) {
     font-size: ${(props) => props.theme.fontxl};
-
+    font-family: elza-narrow,sans-serif; font-weight: 900; font-style: italic;
   }
   @media (max-width: 48em) { 
     align-self: center;
     text-align:center;
+    font-family: elza-narrow,sans-serif; font-weight: 900; font-style: italic;
   }
   @media (max-width: 40em){
     width: 90%;
+    font-family: elza-narrow,sans-serif; font-weight: 900; font-style: italic;
   }
 
   
@@ -61,7 +63,7 @@ const SubTitle = styled.h3`
     text-align:center;
   }
   
-`
+`;
 
 const ButtonContainer = styled.div`
  width: 80%;
@@ -76,33 +78,33 @@ const ButtonContainer = styled.div`
     }
   }
 
-`
+`;
 const TypeWriterText = () => {
   return (
     <>
-        <Title>
-      <Typewriter
-        options={{
-          autoStart: true,
-          loop: true,
-        }}
-        onInit={(typewriter) => {
-          typewriter
-            .typeString(`<span class="text-1">Changing the Norm!</span>`)
-            .pauseFor(2000)
-            .deleteAll()
-            .typeString(`<span class="text-2">Reimagine Education.</span>`)
-            .pauseFor(2000)
-            .deleteAll()
-            .typeString(`<span class="text-3">Fostering Creativity.</span>`)
-            .pauseFor(2000)
-            .deleteAll()
-            .start();
-        }}
-      />
-      
-    </Title>
-    
+      <Title>
+        <Typewriter
+          options={{
+            autoStart: true,
+            loop: true,
+          }}
+          onInit={(typewriter) => {
+            typewriter
+              .typeString(`<span class="text-1">Changing the Norm!</span>`)
+              .pauseFor(2000)
+              .deleteAll()
+              .typeString(`<span class="text-2">Reimagine Education.</span>`)
+              .pauseFor(2000)
+              .deleteAll()
+              .typeString(`<span class="text-3">Fostering Creativity.</span>`)
+              .pauseFor(2000)
+              .deleteAll()
+              .start();
+          }}
+        />
+
+      </Title>
+
     </>
   );
 };
