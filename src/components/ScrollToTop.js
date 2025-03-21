@@ -1,7 +1,7 @@
-import React, { useLayoutEffect, useRef } from 'react'
+import React, { useLayoutEffect, useRef, useEffect } from 'react'
 import { useWindowScroll } from 'react-use';
 import styled from 'styled-components'
-
+import { useLocation } from 'react-router-dom';
 
 const Up = styled.div`
 width: 3rem;
@@ -39,7 +39,8 @@ transition:all 0.2s ease ;
 const ScrollToTop = () => {
 
     const ref = useRef(null);
-    const {y} = useWindowScroll();
+    const { y } = useWindowScroll();
+    const { pathname, hash } = useLocation();
 
     const scrollToTop = () => {
 
@@ -59,6 +60,23 @@ const ScrollToTop = () => {
             ref.current.style.display = "none"
         }
       }, [y])
+
+      useEffect(() => {
+        // If there's a hash in the URL, scroll to that element
+        if (hash) {
+          // Slight delay to ensure the DOM is fully loaded
+          setTimeout(() => {
+            const element = document.getElementById(hash.substring(1));
+            if (element) {
+              element.scrollIntoView({ behavior: 'smooth' });
+            }
+          }, 100);
+        } else {
+          // If no hash, scroll to top of the page
+          window.scrollTo(0, 0);
+        }
+      }, [pathname, hash]);
+
   return (
     <Up  ref={ref}  onClick={() => scrollToTop()}>
         &#x2191;

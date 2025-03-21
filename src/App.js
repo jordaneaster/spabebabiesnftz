@@ -21,6 +21,7 @@ function App() {
     <Router>
       <ThemeProvider theme={dark}>
         <GlobalStyles />
+        <ScrollToTop />
         <Routes>
           <Route path="/" element={
             <>
@@ -33,7 +34,6 @@ function App() {
               <Team />
               <Faq />
               <Footer />
-              <ScrollToTop />
             </>
           } />
           
@@ -42,14 +42,14 @@ function App() {
               <Navigation />
               <Astroverse />
               <Footer />
-              <ScrollToTop />
             </>
           } />
 
           <Route path="/etherland" element={
             <>
+              <Navigation />
               <Etherland />
-              <ScrollToTop />
+              <Footer />
             </>
           } />
         </Routes>

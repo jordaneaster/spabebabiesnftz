@@ -3,6 +3,7 @@ import styled from 'styled-components'
 import Button from './Button'
 import Logo from './Logo'
 import Btn from './Btn'
+import { Link, useLocation } from 'react-router-dom';
 
 const Section = styled.section`
 width: 100vw;
@@ -144,60 +145,93 @@ transition: all 0.3s ease;
 &::before{
   bottom: ${props => props.click ? '0.3rem' : '0.5rem'};
   transform: ${props => props.click ? 'rotate(40deg)' : 'rotate(0)'  };
-}
 
 
 `
  
 const Navigation = () => {
-
+  const location = useLocation();
   const [click, setClick] = useState(false);
   
-const scrollTo = (id) => {
+  const isHomePage = location.pathname === '/';
   
+  const navigateToSection = (sectionId) => {
+    if (isHomePage) {
+      document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
 
+  const scrollTo = (id) => {
+    let element = document.getElementById(id);
 
+    element.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+      inline: 'nearest'
+    })
 
-
-  let element = document.getElementById(id);
-
-  element.scrollIntoView({
-    behavior: 'smooth',
-    block: 'start',
-    inline: 'nearest'
-  })
-
-  setClick(!click);
-}
+    setClick(!click);
+  }
 
   return (
-    
     <Section id="navigation">
       <NavBar>
         <Logo />
-        <HamburgerMenu  click={click}  onClick={() => setClick(!click)}>
+        <HamburgerMenu click={click} onClick={() => setClick(!click)}>
           &nbsp;
         </HamburgerMenu>
         <Menu click={click}>
-          <MenuItem onClick={() => scrollTo('home')}  >Home</MenuItem>
-          <MenuItem onClick={() => scrollTo('about')}  >About</MenuItem>
-          <MenuItem onClick={() => scrollTo('roadmap')}  >Roadmap</MenuItem>
-          <MenuItem onClick={() => scrollTo('showcase')}  >Showcase</MenuItem>
-          <MenuItem onClick={() => scrollTo('team')}  >Team</MenuItem>
-          <MenuItem onClick={() => scrollTo('faq')}  >Faq</MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#home" onClick={() => navigateToSection('home')}>Home</a>
+            ) : (
+              <Link to="/">Home</Link>
+            )}
+          </MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#about" onClick={() => navigateToSection('about')}>About</a>
+            ) : (
+              <Link to="/#about">About</Link>
+            )}
+          </MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#roadmap" onClick={() => navigateToSection('roadmap')}>Roadmap</a>
+            ) : (
+              <Link to="/#roadmap">Roadmap</Link>
+            )}
+          </MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#showcase" onClick={() => navigateToSection('showcase')}>Showcase</a>
+            ) : (
+              <Link to="/#showcase">Showcase</Link>
+            )}
+          </MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#team" onClick={() => navigateToSection('team')}>Team</a>
+            ) : (
+              <Link to="/#team">Team</Link>
+            )}
+          </MenuItem>
+          <MenuItem>
+            {isHomePage ? (
+              <a href="#faq" onClick={() => navigateToSection('faq')}>Faq</a>
+            ) : (
+              <Link to="/#faq">Faq</Link>
+            )}
+          </MenuItem>
           <MenuItem>
             <div className="mobile">
-            <Btn></Btn>
+              <Btn></Btn>
             </div>
           </MenuItem>
         </Menu>
-          <div style={{marginRight:'10%'}} className="desktop">
-          {/* <Button sx={{backgroundColor: "#ede135",}} text="Connect Wallet" link="https://google.com" />
-           */}
-           <Btn></Btn>
-          
-          </div>
-
+        <div style={{ marginRight: '10%' }} className="desktop">
+          <Btn></Btn>
+        </div>
       </NavBar>
     </Section>
   )
