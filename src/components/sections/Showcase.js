@@ -2,16 +2,6 @@ import React, { useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { useNavigate } from 'react-router-dom';
 
-import img1 from '../../assets/char/1.svg';
-import img2 from '../../assets/char/1.svg';
-import img3 from '../../assets/char/1.svg';
-import img4 from '../../assets/char/1.svg';
-import img5 from '../../assets/char/1.svg';
-import img6 from '../../assets/char/1.svg';
-import img7 from '../../assets/char/1.svg';
-import img8 from '../../assets/char/1.svg';
-import img9 from '../../assets/char/1.svg';
-import img10 from '../../assets/char/1.svg';
 import ETH from '../../assets/icons8-ethereum-48.png';
 import bgr from '../../assets/media/BGR3.png';
 
