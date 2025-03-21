@@ -7,25 +7,14 @@ import "swiper/css/pagination";
 import "swiper/css/navigation";
 import Popup from '../components/Popup';
 
-
 import { Pagination, Navigation, Autoplay, EffectCards } from "swiper";
-
-
-// import img4 from '../assets/Nfts/bighead-3.svg';
-// import img5 from '../assets/Nfts/bighead-4.svg';
-// import img6 from '../assets/Nfts/bighead-5.svg';
-// import img7 from '../assets/Nfts/bighead-6.svg';
-// import img8 from '../assets/Nfts/bighead-7.svg';
-// import img9 from '../assets/Nfts/bighead-8.svg';
-// import img10 from '../assets/Nfts/bighead-9.svg';
-
 import Arrow from '../assets/Arrow.svg';
-
 
 const Container = styled.div`
 width: 50vw;
 height: auto;
 overflow: hidden;
+position: relative;
 @media (max-width: 70em){
     height: auto;
 }
@@ -55,6 +44,12 @@ overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
+    position: relative;
+    cursor: pointer;
+
+    &:hover .click-overlay {
+      opacity: 1;
+    }
 
     img{
         display: block;
@@ -74,6 +69,15 @@ overflow: hidden;
     background-image: url(${Arrow});
     background-position: center;
     background-size: cover;
+    filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.7));
+    opacity: 0.9;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: scale(1.1);
+      opacity: 1;
+      filter: drop-shadow(0px 0px 12px rgba(255, 255, 255, 0.9));
+    }
 
     &:after{
         display: none;
@@ -97,6 +101,15 @@ overflow: hidden;
     background-image: url(${Arrow});
     background-position: center;
     background-size: cover;
+    filter: drop-shadow(0px 0px 8px rgba(255, 255, 255, 0.7));
+    opacity: 0.9;
+    transition: all 0.3s ease;
+
+    &:hover {
+      transform: rotate(180deg) scale(1.1);
+      opacity: 1;
+      filter: drop-shadow(0px 0px 12px rgba(255, 255, 255, 0.9));
+    }
 
     &:after{
         display: none;
@@ -113,35 +126,88 @@ overflow: hidden;
 
 }
 
+.pulse-animation {
+  animation: pulse 2s infinite;
+  @keyframes pulse {
+    0% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    50% {
+      transform: scale(1.05);
+      opacity: 1;
+    }
+    100% {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+  }
+}
+
+.navigation-hint {
+  text-align: center;
+  color: ${props => props.theme.text};
+  font-size: 1rem;
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  opacity: 0.7;
+}
 `
 
-
-
-
+const ClickOverlay = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  z-index: 10;
+  
+  .info-text {
+    background-color: rgba(0, 0, 0, 0.7);
+    padding: 10px 20px;
+    border-radius: 30px;
+    color: white;
+    font-weight: 500;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  
+  .info-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 2px solid white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+  }
+`;
 
 const RMCarousel = () => {
     const [isOpen, setIsOpen] = useState(false);
+    const [isOpen2, setIsOpen2] = useState(false);
+    const [isOpen3, setIsOpen3] = useState(false);
  
     const togglePopup = () => {
       setIsOpen(!isOpen);
     }
-
-
-    const [isOpen2, setIsOpen2] = useState(false);
- 
+    
     const togglePopup2 = () => {
       setIsOpen2(!isOpen2);
     }
-
-
-    const [isOpen3, setIsOpen3] = useState(false);
- 
+    
     const togglePopup3 = () => {
       setIsOpen3(!isOpen3);
     }
-    function butt(){
-        
-    }
+
   return (
     <Container>
         <b style={{color:'#ff0066',marginTop:'0%',marginLeft:'0%',fontSize:'35px',
@@ -149,6 +215,11 @@ const RMCarousel = () => {
         ,display: 'flex',justifyContent: 'center',alignItems: 'center'
     
     }}>THE JOURNEY 1.0</b>
+        
+        <div className="navigation-hint">
+          Navigate using the arrows and click on images to learn more
+        </div>
+        
         <Swiper
         autoplay={{
             delay:2000000,
@@ -161,19 +232,44 @@ const RMCarousel = () => {
             draggable:true
         }}
         modules={[EffectCards,Pagination, Navigation, Autoplay]}
-        navigation={true}
+        navigation={{
+          nextEl: '.swiper-button-next',
+          prevEl: '.swiper-button-prev',
+        }}
         effect={"cards"}
         grabCursor={true}
-        
         className="mySwiper"
       >
-
-        
-        <SwiperSlide onClick={togglePopup}>  <img width={'100%'}  src="https://i.postimg.cc/Kjps8R5h/EL.png" alt="The Weirdos" /> 
+        <SwiperSlide onClick={togglePopup}>  
+          <img width={'100%'} src="https://i.postimg.cc/Kjps8R5h/EL.png" alt="The Weirdos" /> 
+          <ClickOverlay className="click-overlay">
+            <div className="info-text">
+              <span className="info-icon">i</span>
+              <span>Click for details</span>
+            </div>
+          </ClickOverlay>
         </SwiperSlide>
         
-        <SwiperSlide onClick={togglePopup2}>  <img width={500} height={400}  src="https://i.postimg.cc/QN0jLm1v/AV.png" alt="The Weirdos" />   </SwiperSlide>
-        <SwiperSlide onClick={ togglePopup3}>  <img width={500} height={400}  src="https://i.postimg.cc/rsc260wV/MVV.png" alt="The Weirdos" />   </SwiperSlide>
+        <SwiperSlide onClick={togglePopup2}>  
+          <img width={500} height={400} src="https://i.postimg.cc/QN0jLm1v/AV.png" alt="The Weirdos" />   
+          <ClickOverlay className="click-overlay">
+            <div className="info-text">
+              <span className="info-icon">i</span>
+              <span>Click for details</span>
+            </div>
+          </ClickOverlay>
+        </SwiperSlide>
+        
+        <SwiperSlide onClick={togglePopup3}>  
+          <img width={500} height={400} src="https://i.postimg.cc/rsc260wV/MVV.png" alt="The Weirdos" />   
+          <ClickOverlay className="click-overlay">
+            <div className="info-text">
+              <span className="info-icon">i</span>
+              <span>Click for details</span>
+            </div>
+          </ClickOverlay>
+        </SwiperSlide>
+        
         {/* <SwiperSlide>  <img width={500} height={400}  src={img4} alt="The Weirdos" />   </SwiperSlide>
         <SwiperSlide>  <img width={500} height={400}  src={img5} alt="The Weirdos" />   </SwiperSlide>
         <SwiperSlide>  <img width={500} height={400}  src={img6} alt="The Weirdos" />   </SwiperSlide>
@@ -181,8 +277,11 @@ const RMCarousel = () => {
         <SwiperSlide>  <img width={500} height={400}  src={img8} alt="The Weirdos" />   </SwiperSlide>
         <SwiperSlide>  <img width={500} height={400}  src={img9} alt="The Weirdos" />   </SwiperSlide>
         <SwiperSlide>  <img width={500} height={400}  src={img10} alt="The Weirdos" />   </SwiperSlide> */}
-
       </Swiper>
+      
+      {/* Manually add more prominent arrows with pulse animation */}
+      <div className="swiper-button-next pulse-animation"></div>
+      <div className="swiper-button-prev pulse-animation"></div>
       
       <div>
    {isOpen && <Popup

@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
+import { useNavigate } from 'react-router-dom';
 
 import img1 from '../../assets/char/1.svg';
 import img2 from '../../assets/char/1.svg';
@@ -153,14 +154,108 @@ const NftItem = ({ img, number = 0, price = 0, passRef }) => {
   );
 };
 
+const CallToAction = styled.div`
+  width: 80%;
+  max-width: 1200px;
+  margin: 2rem auto;
+  padding: 2.5rem;
+  background-color: rgba(36, 37, 38, 0.9);
+  border-radius: 12px;
+  border: 2px solid ${props => props.theme.text};
+  box-shadow: 0 0 25px rgba(0, 0, 0, 0.6);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  
+  @media (max-width: 48em) {
+    width: 90%;
+    padding: 1.5rem;
+  }
+`;
+
+const Title = styled.h2`
+  font-size: ${props => props.theme.fontxxl};
+  color: ${props => props.theme.text};
+  margin-bottom: 1rem;
+  text-transform: uppercase;
+  letter-spacing: 2px;
+  
+  @media (max-width: 48em) {
+    font-size: ${props => props.theme.fontlg};
+  }
+`;
+
+const Description = styled.p`
+  font-size: ${props => props.theme.fontmd};
+  color: ${props => `rgba(${props.theme.textRgba}, 0.9)`};
+  margin-bottom: 2rem;
+  max-width: 800px;
+  line-height: 1.6;
+  
+  @media (max-width: 48em) {
+    font-size: ${props => props.theme.fontsm};
+  }
+`;
+
+const Button = styled.button`
+  padding: 1.2rem 2.5rem;
+  background: linear-gradient(90deg, #9b51e0 0%, #3081ed 100%);
+  color: white;
+  font-size: ${props => props.theme.fontmd};
+  font-weight: 700;
+  border: none;
+  border-radius: 50px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 7px 15px rgba(155, 81, 224, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+  
+  @media (max-width: 48em) {
+    padding: 1rem 2rem;
+    font-size: ${props => props.theme.fontsm};
+  }
+`;
+
+const HighlightSpan = styled.span`
+  color: #9b51e0;
+  font-weight: 700;
+`;
+
+const EtherlandCTA = () => {
+  const navigate = useNavigate();
+
+  return (
+    <CallToAction>
+      <Title>Discover Your Cosmic Identity</Title>
+      <Description>
+        Unlock your unique <HighlightSpan>Space Baby Soul</HighlightSpan> and join the intergalactic community. 
+        Each soul is algorithmically generated with rare cosmic traits that determine your position in the Etherland. 
+        Mint now to secure your place in this expanding digital universe!
+      </Description>
+      <Button onClick={() => navigate('/etherland')}>
+        Begin Soul Journey
+      </Button>
+    </CallToAction>
+  );
+};
 
 const Showcase = () => {
-
   const Row1Ref = useRef(null);
   const Row2Ref = useRef(null);
 
   return (
     <Section id="showcase">
+      <EtherlandCTA />
       <Row direction="none" ref={Row1Ref}>
         <NftItem img="https://i.postimg.cc/HswdNhLx/image-10.png" number={852} price={1} passRef={Row1Ref} />
         <NftItem img='https://i.postimg.cc/pTmP1V9b/image-11.png' number={123} price={1.2} passRef={Row1Ref} />

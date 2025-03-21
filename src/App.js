@@ -1,61 +1,60 @@
-
-
 import GlobalStyles from "./styles/GlobalStyles";
-import { light } from "./styles/Themes";
 import {dark} from "./styles/Themes";
 import { ThemeProvider } from "styled-components";
-
-// import { lazy, Suspense } from "react";
-// import Loading from "./components/Loading";
-
-// Below Imports using React.lazy and Suspence
-
-// const Navigation = lazy(() => import("./components/Navigation"));
-// const Home = lazy(() => import("./components/sections/Home"));
-// const About = lazy(() => import("./components/sections/About"));
-// const Roadmap = lazy(() => import("./components/sections/Roadmap"));
-// const Team = lazy(() => import("./components/sections/Team"));
-// const Showcase = lazy(() => import("./components/sections/Showcase"));
-// const Faq = lazy(() => import("./components/sections/Faq"));
-// const Footer = lazy(() => import("./components/Footer"));
-// const ScrollToTop = lazy(() => import("./components/ScrollToTop"));
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 
 import Navigation from "./components/Navigation";
 import About from "./components/sections/About";
 import Rm from "./components/sections/Rm";
 import Home from "./components/sections/Home";
-import Roadmap from "./components/sections/Roadmap";
 import Team from "./components/sections/Team";
 import Footer from "./components/Footer";
 import Showcase from "./components/sections/Showcase";
 import Faq from "./components/sections/Faq";
 import ScrollToTop from "./components/ScrollToTop";
-import Oath from "./components/sections/Oath"
+import Oath from "./components/sections/Oath";
+import Astroverse from "./components/sections/Astroverse";
+import Etherland from './pages/Etherland';
 
 function App() {
-
   return (
-    <main>
-      
-      <GlobalStyles />
+    <Router>
       <ThemeProvider theme={dark}>
-        {/* <Suspense fallback={<Loading />}> */}
-        
-          <Navigation />
-          <Home />
+        <GlobalStyles />
+        <Routes>
+          <Route path="/" element={
+            <>
+              <Navigation />
+              <Home />
+              <About />
+              <Rm/>
+              <Showcase />
+              <Oath/>
+              <Team />
+              <Faq />
+              <Footer />
+              <ScrollToTop />
+            </>
+          } />
+          
+          <Route path="/astroverse" element={
+            <>
+              <Navigation />
+              <Astroverse />
+              <Footer />
+              <ScrollToTop />
+            </>
+          } />
 
-          <About />
-          <Rm/>
-          <Showcase />
-          <Oath/>
-          <Team />
-          <Faq />
-          <Footer />
-          {/* <ScrollToTop scrollPosition={y}/> */}
-          <ScrollToTop />{" "}
-        {/* </Suspense> */}
+          <Route path="/etherland" element={
+            <>
+              <Etherland />
+              <ScrollToTop />
+            </>
+          } />
+        </Routes>
       </ThemeProvider>
-    </main>
+    </Router>
   );
 }
 
