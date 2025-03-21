@@ -159,19 +159,8 @@ const Navigation = () => {
     if (isHomePage) {
       document.getElementById(sectionId)?.scrollIntoView({ behavior: 'smooth' });
     }
+    setClick(false);
   };
-
-  const scrollTo = (id) => {
-    let element = document.getElementById(id);
-
-    element.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-      inline: 'nearest'
-    })
-
-    setClick(!click);
-  }
 
   return (
     <Section id="navigation">

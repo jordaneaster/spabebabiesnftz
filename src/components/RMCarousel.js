@@ -7,7 +7,7 @@ import "swiper/css/pagination";
 import "swiper/css/navigation";
 import Popup from '../components/Popup';
 
-import { Pagination, Navigation, Autoplay, EffectCards } from "swiper";
+import { Navigation, EffectCards } from "swiper";
 import Arrow from '../assets/Arrow.svg';
 
 const Container = styled.div`
@@ -231,7 +231,7 @@ const RMCarousel = () => {
         scrollbar={{
             draggable:true
         }}
-        modules={[EffectCards,Pagination, Navigation, Autoplay]}
+        modules={[EffectCards, Navigation]}
         navigation={{
           nextEl: '.swiper-button-next',
           prevEl: '.swiper-button-prev',

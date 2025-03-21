@@ -88,11 +88,8 @@ const LoadingAnimation = () => {
   const navigate = useNavigate();
   const [progress, setProgress] = useState(0);
   const [loadingText, setLoadingText] = useState('Initializing Cryptonic Soul Generator...');
-  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    setMounted(true); // Ensure the component is marked as mounted
-    
     const loadingTexts = [
       'Initializing Cryptonic Soul Generator...',
       'Analyzing Guardian Data...',
