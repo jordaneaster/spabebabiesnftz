@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import bgr from '../assets/media/BGR3.png';
 import soulGeneratorImg from '../assets/soul-generator.png';
 
@@ -309,6 +309,25 @@ const Etherland = () => {
   const stageTimeout = useRef(null);
   
   const navigate = useNavigate();
+  const location = useLocation();
+  
+  // Initialization effect to reset component state
+  useEffect(() => {
+    // Reset component state when mounted or route changes
+    setGenerationStage(0);
+    setProgress(0);
+    setStatusMessage('');
+    setIsSoulGenerated(false);
+    setIsGenerating(false);
+    setShowTransition(false);
+    setSoulImage(null);
+    
+    // Clean up any running animations/timers
+    return () => {
+      clearTimeout(stageTimeout.current);
+      clearInterval(progressInterval.current);
+    };
+  }, [location.pathname]);
   
   // Generate random Space Baby image
   const generateRandomBabyImage = () => {
@@ -411,8 +430,33 @@ const Etherland = () => {
     runGenerationSequence();
   };
 
+  // Add this useEffect to ensure the component is visible when mounted
+  useEffect(() => {
+    // Force this component to be visible
+    document.title = "Etherland - Space Babiez";
+    
+    // Scroll to top to ensure component is visible
+    window.scrollTo(0, 0);
+    
+    // Find any FAQ sections that might be covering this component and hide them
+    const faqElements = document.querySelectorAll('[id*="faq"],[class*="faq"]');
+    if (faqElements.length > 0) {
+      faqElements.forEach(el => {
+        if (el.style) {
+          el.style.display = 'none';
+        }
+      });
+    }
+    
+    // Make sure our component is visible
+    const currentElement = document.querySelector('.etherland-soul-generator');
+    if (currentElement) {
+      currentElement.style.display = 'flex';
+    }
+  }, []);
+
   return (
-    <Section>
+    <Section className="etherland-soul-generator">
       <FadeTransition visible={showTransition} />
       
       <Container>

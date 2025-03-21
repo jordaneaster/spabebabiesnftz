@@ -234,6 +234,11 @@ const HighlightSpan = styled.span`
 const EtherlandCTA = () => {
   const navigate = useNavigate();
 
+  const handleNavigate = () => {
+    // Force a full page reload to /etherland instead of using React Router
+    window.location.href = '/etherland';
+  };
+
   return (
     <CallToAction>
       <Title>Discover Your Cosmic Identity</Title>
@@ -242,7 +247,7 @@ const EtherlandCTA = () => {
         Each soul is algorithmically generated with rare cosmic traits that determine your position in the Etherland. 
         Mint now to secure your place in this expanding digital universe!
       </Description>
-      <Button onClick={() => navigate('/etherland')}>
+      <Button onClick={handleNavigate}>
         Begin Soul Journey
       </Button>
     </CallToAction>
