@@ -213,6 +213,12 @@ const Navigation = () => {
             )}
           </MenuItem>
           <MenuItem>
+            <Link to="/gallery">Gallery</Link>
+          </MenuItem>
+          <MenuItem>
+            <Link to="/profile">My Profile</Link>
+          </MenuItem>
+          <MenuItem>
             <div className="mobile">
               <Btn></Btn>
             </div>

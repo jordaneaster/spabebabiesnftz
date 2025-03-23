@@ -251,14 +251,12 @@ const Showcase = () => {
   return (
     <Section id="showcase">
       <EtherlandCTA />
-      <Row direction="none" ref={Row1Ref}>
+      <Row direction="normal" ref={Row1Ref}>
         <NftItem img="https://i.postimg.cc/HswdNhLx/image-10.png" number={852} price={1} passRef={Row1Ref} />
         <NftItem img='https://i.postimg.cc/pTmP1V9b/image-11.png' number={123} price={1.2} passRef={Row1Ref} />
         <NftItem img='https://i.postimg.cc/cLTZxtwG/image-12.png' number={456} price={2.5} passRef={Row1Ref} />
         <NftItem img='https://i.postimg.cc/15hyJQs2/image-13.png' number={666} price={3.5} passRef={Row1Ref} />
         <NftItem img='https://i.postimg.cc/tRVX3TQF/image-14.png' number={452} price={4.7} passRef={Row1Ref} />
-
-
       </Row>
       <Row direction="reverse" ref={Row2Ref}>
         <NftItem img='https://i.postimg.cc/d0tsrjw0/image-6.png' number={888} price={1.2} passRef={Row2Ref} />
@@ -266,8 +264,6 @@ const Showcase = () => {
         <NftItem img='https://i.postimg.cc/XvHV8BYk/image-8.png' number={455} price={1.8} passRef={Row2Ref} />
         <NftItem img='https://i.postimg.cc/50DfccvH/image-9.png' number={456} price={5.1} passRef={Row2Ref} />
         <NftItem img='https://i.postimg.cc/mrTKLzxh/image-25.png' number={865} price={3.7} passRef={Row2Ref} />
-
-
       </Row>
     </Section>
   );

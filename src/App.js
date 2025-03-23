@@ -15,6 +15,8 @@ import ScrollToTop from "./components/ScrollToTop";
 import Oath from "./components/sections/Oath";
 import Astroverse from "./components/sections/Astroverse";
 import Etherland from './pages/Etherland';
+import UserProfile from './pages/UserProfile';
+import Gallery from './pages/Gallery';
 
 function App() {
   return (
@@ -52,6 +54,9 @@ function App() {
               <Footer />
             </>
           } />
+
+          <Route path="/profile" element={<UserProfile />} />
+          <Route path="/gallery" element={<Gallery />} />
         </Routes>
       </ThemeProvider>
     </Router>
