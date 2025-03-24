@@ -37,6 +37,54 @@ a{
   ::-webkit-scrollbar {
     display: none;
   }
+
+  /* Added styles for rarity table */
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  th, td {
+    text-align: left;
+    padding: 8px;
+  }
+  
+  tr:nth-child(even) {
+    background-color: rgba(155, 81, 224, 0.1);
+  }
+  
+  .rarity-badge {
+    display: inline-block;
+    padding: 0.25rem 0.75rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+  }
+  
+  .rarity-common {
+    background-color: rgba(150, 150, 150, 0.3);
+    color: #bdbdbd;
+  }
+  
+  .rarity-uncommon {
+    background-color: rgba(0, 200, 83, 0.3);
+    color: #00c853;
+  }
+  
+  .rarity-rare {
+    background-color: rgba(33, 150, 243, 0.3);
+    color: #2196f3;
+  }
+  
+  .rarity-epic {
+    background-color: rgba(156, 39, 176, 0.3);
+    color: #9c27b0;
+  }
+  
+  .rarity-legendary {
+    background-color: rgba(255, 193, 7, 0.3);
+    color: #ffc107;
+  }
 `
 
 export default GlobalStyles;

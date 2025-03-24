@@ -5,6 +5,7 @@ import bgr from '../assets/media/BGR3.png';
 import soulGeneratorImg from '../assets/soul-generator.png';
 import supabase from '../utils/supabaseConfig'; // Import Supabase client
 import TABLES from '../utils/supabaseSchema'; // Add import for TABLES
+import RarityTable from '../components/RarityTable'; // Import the new RarityTable component
 
 // Import packages conditionally to avoid errors if they're not installed
 let ethers = null;
@@ -425,6 +426,28 @@ try {
   };
 }
 
+const RarityToggleButton = styled.button`
+  padding: 0.8rem 1.5rem;
+  background: linear-gradient(90deg, #3081ed 0%, #9b51e0 100%);
+  color: white;
+  font-size: ${props => props.theme.fontsm};
+  font-weight: 600;
+  border: none;
+  border-radius: 30px;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 1rem 0;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 10px rgba(155, 81, 224, 0.4);
+  }
+  
+  &:active {
+    transform: translateY(0);
+  }
+`;
+
 const Etherland = () => {
   const [generationStage, setGenerationStage] = useState(0);
   const [progress, setProgress] = useState(0);
@@ -446,6 +469,8 @@ const Etherland = () => {
   
   const navigate = useNavigate();
   const location = useLocation();
+  
+  const [showRarityTable, setShowRarityTable] = useState(false);
   
   // Initialization effect to reset component state
   useEffect(() => {
@@ -1069,6 +1094,12 @@ const Etherland = () => {
           and create a unique Space Baby Soul perfectly attuned to your digital essence. Each generated Soul has unique attributes, 
           powers, and rarity that will determine your role in the Etherland metaverse.
         </Description>
+        
+        <RarityToggleButton onClick={() => setShowRarityTable(!showRarityTable)}>
+          {showRarityTable ? 'Hide Rarity Table' : 'Show Rarity Table'}
+        </RarityToggleButton>
+        
+        {showRarityTable && <RarityTable />}
         
         {!walletConnected && !isGenerating && (
           <>
