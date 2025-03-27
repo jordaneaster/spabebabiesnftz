@@ -1,543 +1,480 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
-import { useNavigate } from 'react-router-dom';
-import bgr from '../assets/media/BGR3.png';
-import Logo from '../components/Logo';
-import Button from '../components/Button';
+import gsap from 'gsap';
+import { Link } from 'react-router-dom';
 
-// Import component for navbar
-const Navigation = styled.nav`
-  width: 100%;
-  background: rgba(36, 37, 38, 0.8);
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 2rem;
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 10;
-  backdrop-filter: blur(4px);
+// Animations
+const float = keyframes`
+  0% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(3deg); }
+  100% { transform: translateY(0px) rotate(0deg); }
 `;
 
-const Menu = styled.ul`
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  list-style: none;
-  
-  @media (max-width: 64em) {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100vw;
-    height: 100vh;
-    z-index: 100;
-    background-color: ${props => `rgba(${props.theme.bodyRgba},0.85)`};
-    backdrop-filter: blur(10px);
-    transform: ${props => props.click ? 'translateY(0)' : 'translateY(1000%)'};
-    transition: all 0.3s ease;
-    flex-direction: column;
-    justify-content: center;
-  }
+const rotate = keyframes`
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
 `;
 
-const MenuItem = styled.li`
-  margin: 0 1rem;
-  color: ${props => props.theme.text};
-  cursor: pointer;
-  font-size: ${props => props.theme.fontmd};
-  
-  &::after {
-    content: '';
-    display: block;
-    width: 0%;
-    height: 2px;
-    background: ${props => props.theme.text};
-    transition: width 0.3s ease;
-  }
-  
-  &:hover::after {
-    width: 100%;
-  }
-  
-  @media (max-width: 64em) {
-    margin: 1rem 0;
-    font-size: ${props => props.theme.fontlg};
-  }
+const pulse = keyframes`
+  0% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 0.8; }
 `;
 
-const HamburgerMenu = styled.span`
-  width: ${props => props.click ? '2rem' : '1.5rem'};
-  height: 2px;
-  background: ${props => props.theme.text};
-  position: absolute;
-  top: 2rem;
-  right: 2rem;
-  transform: ${props => props.click ? 'translateX(-50%) rotate(90deg)' : 'translateX(0) rotate(0)'};
-  display: none;
-  justify-content: center;
-  align-items: center;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  
-  @media (max-width: 64em) {
-    display: flex;
-  }
-  
-  &::after, &::before {
-    content: '';
-    width: ${props => props.click ? '1rem' : '1.5rem'};
-    height: 2px;
-    right: ${props => props.click ? '-2px' : '0'};
-    background: ${props => props.theme.text};
-    position: absolute;
-    transition: all 0.3s ease;
-  }
-  
-  &::after {
-    top: ${props => props.click ? '0.3rem' : '0.5rem'};
-    transform: ${props => props.click ? 'rotate(-40deg)' : 'rotate(0)'};
-  }
-  
-  &::before {
-    bottom: ${props => props.click ? '0.3rem' : '0.5rem'};
-    transform: ${props => props.click ? 'rotate(40deg)' : 'rotate(0)'};
-  }
+const starTwinkle = keyframes`
+  0% { opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { opacity: 0.4; }
 `;
 
-// Enhanced styling for the existing components
 const Section = styled.section`
   min-height: 100vh;
-  width: 100%;
-  background-color: ${props => props.theme.body};
-  background-image: url(${bgr});
-  background-size: cover;
-  background-repeat: no-repeat;
+  width: 100vw;
+  background-color: #000000;
+  background-image: 
+    radial-gradient(circle at 10% 20%, rgba(40, 0, 80, 0.4) 0%, transparent 50%),
+    radial-gradient(circle at 90% 80%, rgba(0, 80, 120, 0.4) 0%, transparent 50%);
+  position: relative;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  align-items: center;
   justify-content: flex-start;
-  padding: 6rem 2rem 2rem; /* Added top padding for navbar */
+  align-items: center;
+  padding-top: 3rem;
 `;
 
-const Container = styled.div`
-  width: 80%;
+const StarsContainer = styled.div`
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  pointer-events: none;
+`;
+
+const Star = styled.div`
+  position: absolute;
+  width: ${props => props.size || 3}px;
+  height: ${props => props.size || 3}px;
+  background-color: #ffffff;
+  border-radius: 50%;
+  opacity: 0.8;
+  animation: ${starTwinkle} ${props => props.duration || 3}s infinite ease-in-out;
+  animation-delay: ${props => props.delay || 0}s;
+  top: ${props => props.top || 0}%;
+  left: ${props => props.left || 0}%;
+`;
+
+const NebulaNFT = styled.div`
+  position: relative;
+  z-index: 2;
+  width: 90%;
   max-width: 1200px;
-  background-color: rgba(36, 37, 38, 0.9);
   border-radius: 20px;
-  padding: 3rem;
-  margin-top: 2rem;
+  padding: 2rem;
   display: flex;
   flex-direction: column;
   align-items: center;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.7);
-  
-  @media (max-width: 64em) {
-    width: 90%;
-    padding: 2rem;
-  }
-  
-  @media (max-width: 30em) {
-    width: 95%;
-    padding: 1.5rem;
-  }
+  background: rgba(5, 5, 15, 0.6);
+  border: 1px solid rgba(174, 255, 0, 0.2);
+  backdrop-filter: blur(10px);
 `;
 
 const Title = styled.h1`
-  font-size: ${props => props.theme.fontxxl};
-  text-transform: uppercase;
-  color: ${props => props.theme.text};
+  font-size: 2.5rem;
+  color: #aeff00;
   margin-bottom: 1.5rem;
   text-align: center;
-  letter-spacing: 3px;
+  font-family: 'flegrei', sans-serif;
   
-  @media (max-width: 48em) {
-    font-size: ${props => props.theme.fontxl};
-  }
-  
-  @media (max-width: 30em) {
-    font-size: ${props => props.theme.fontlg};
+  @media (max-width: 768px) {
+    font-size: 2rem;
   }
 `;
 
-const Subtitle = styled.h2`
-  font-size: ${props => props.theme.fontlg};
-  color: ${props => props.theme.text};
-  margin-bottom: 1.5rem;
-  text-align: center;
-  
-  @media (max-width: 48em) {
-    font-size: ${props => props.theme.fontmd};
-  }
-`;
-
-const Description = styled.p`
-  font-size: ${props => props.theme.fontmd};
-  color: ${props => `rgba(${props.theme.textRgba}, 0.9)`};
-  margin-bottom: 2rem;
-  text-align: center;
-  max-width: 800px;
-  line-height: 1.8;
-  
-  @media (max-width: 48em) {
-    font-size: ${props => props.theme.fontsm};
-  }
-`;
-
-const float = keyframes`
-  0% {
-    transform: translateY(0px);
-  }
-  50% {
-    transform: translateY(-20px);
-  }
-  100% {
-    transform: translateY(0px);
-  }
-`;
-
-// Enhanced space baby display components
-const SpaceBabyDisplay = styled.div`
+const NFTShowcase = styled.div`
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   margin: 2rem 0;
-  padding: 2rem;
-  border-radius: 20px;
-  background: rgba(155, 81, 224, 0.1);
-  border: 1px solid #9b51e0;
-  max-width: 600px;
-  width: 100%;
+`;
+
+const NFTDisplayContainer = styled.div`
   position: relative;
+  width: 300px;
+  height: 300px;
+  margin: 0 auto;
   
-  &::before {
-    content: '';
-    position: absolute;
-    top: -10px;
-    left: -10px;
-    right: -10px;
-    bottom: -10px;
-    background: linear-gradient(45deg, rgba(155, 81, 224, 0.2) 0%, rgba(48, 129, 237, 0.2) 100%);
-    border-radius: 30px;
-    z-index: -1;
-    filter: blur(15px);
-    pointer-events: none;
+  @media (max-width: 768px) {
+    width: 250px;
+    height: 250px;
   }
 `;
 
-const glowing = keyframes`
-  0% { box-shadow: 0 0 10px rgba(155, 81, 224, 0.5); }
-  50% { box-shadow: 0 0 20px rgba(155, 81, 224, 0.8), 0 0 40px rgba(48, 129, 237, 0.4); }
-  100% { box-shadow: 0 0 10px rgba(155, 81, 224, 0.5); }
+const NFTOrbitalRing = styled.div`
+  position: absolute;
+  width: 340px;
+  height: 340px;
+  border: 1px solid rgba(174, 255, 0, 0.6);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: ${rotate} 20s linear infinite;
+  
+  &:before {
+    content: '';
+    position: absolute;
+    width: 15px;
+    height: 15px;
+    background: #aeff00;
+    border-radius: 50%;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    box-shadow: 0 0 10px #aeff00, 0 0 20px #aeff00;
+  }
+  
+  @media (max-width: 768px) {
+    width: 290px;
+    height: 290px;
+  }
 `;
 
-const ProfileCircle = styled.div`
+const NFTSecondRing = styled.div`
+  position: absolute;
+  width: 400px;
+  height: 400px;
+  border: 1px dashed rgba(108, 0, 255, 0.4);
+  border-radius: 50%;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  animation: ${rotate} 30s linear infinite reverse;
+  
+  &:before {
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: #6c00ff;
+    border-radius: 50%;
+    top: 50%;
+    left: 0;
+    transform: translateY(-50%);
+    box-shadow: 0 0 10px #6c00ff, 0 0 15px #6c00ff;
+  }
+  
+  @media (max-width: 768px) {
+    width: 330px;
+    height: 330px;
+  }
+`;
+
+const NFTImage = styled.div`
+  position: relative;
   width: 250px;
   height: 250px;
   border-radius: 50%;
   overflow: hidden;
-  border: 4px solid #9b51e0;
-  margin-bottom: 2rem;
-  animation: ${float} 6s ease-in-out infinite, ${glowing} 3s infinite;
+  background: radial-gradient(circle, #1a002a 0%, #000000 100%);
+  animation: ${float} 6s ease-in-out infinite;
+  box-shadow: 0 5px 25px rgba(108, 0, 255, 0.5);
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   
   img {
+    width: 90%;
+    height: 90%;
+    object-fit: contain;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+  }
+  
+  &:before {
+    content: '';
+    position: absolute;
     width: 100%;
     height: 100%;
-    object-fit: cover;
+    background: linear-gradient(45deg, rgba(108, 0, 255, 0.2), rgba(174, 255, 0, 0.2));
+    mix-blend-mode: screen;
+    animation: ${pulse} 4s infinite ease-in-out;
+  }
+  
+  @media (max-width: 768px) {
+    width: 200px;
+    height: 200px;
   }
 `;
 
-const BabyName = styled.h3`
-  font-size: ${props => props.theme.fontlg};
-  color: #9b51e0;
+const NFTInfo = styled.div`
+  width: 100%;
+  max-width: 600px;
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border-radius: 15px;
+  background: rgba(20, 20, 40, 0.7);
+  border: 1px solid rgba(174, 255, 0, 0.3);
+`;
+
+const NFTName = styled.h2`
+  color: #aeff00;
+  font-size: 1.8rem;
   margin-bottom: 1rem;
   text-align: center;
 `;
 
-const AttributeDisplay = styled.div`
+const AttributesTitle = styled.h3`
+  color: #ffffff;
+  font-size: 1.2rem;
+  margin: 1rem 0;
+  text-align: center;
+`;
+
+const AttributesContainer = styled.div`
   display: flex;
   flex-wrap: wrap;
   gap: 1rem;
-  margin: 1.5rem 0;
   justify-content: center;
+  margin-top: 1rem;
 `;
 
-const AttributeBadge = styled.div`
-  background: rgba(48, 129, 237, 0.1);
-  border: 1px solid #3081ed;
-  border-radius: 50px;
+const AttributeTag = styled.div`
+  background: rgba(174, 255, 0, 0.1);
+  border: 1px solid rgba(174, 255, 0, 0.3);
+  border-radius: 20px;
   padding: 0.5rem 1rem;
-  font-size: ${props => props.theme.fontsm};
   
   span {
-    font-weight: bold;
-    color: #9b51e0;
-    margin-left: 0.5rem;
+    display: block;
+    text-align: center;
+    
+    &:first-child {
+      color: #aeff00;
+      font-size: 0.9rem;
+      margin-bottom: 0.2rem;
+    }
+    
+    &:last-child {
+      color: white;
+      font-size: 1rem;
+    }
   }
 `;
 
-const ComingSoonSection = styled.div`
-  margin-top: 3rem;
-  padding: 2rem;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 20px;
-  text-align: center;
-  max-width: 800px;
-  width: 100%;
-  border: 2px dashed rgba(155, 81, 224, 0.5);
-`;
-
-const ComingSoonLabel = styled.div`
-  display: inline-block;
-  background: linear-gradient(90deg, #9b51e0 0%, #3081ed 100%);
-  padding: 0.5rem 1.5rem;
-  border-radius: 50px;
-  margin-bottom: 1rem;
-  font-weight: bold;
-  font-size: ${props => props.theme.fontmd};
-  letter-spacing: 2px;
-`;
-
-const UnderConstructionBanner = styled.div`
-  position: relative;
-  background: repeating-linear-gradient(
-    45deg,
-    rgba(0, 0, 0, 0.8),
-    rgba(0, 0, 0, 0.8) 10px,
-    rgba(155, 81, 224, 0.8) 10px,
-    rgba(155, 81, 224, 0.8) 20px
-  );
-  padding: 0.5rem;
-  margin-top: -1rem;
-  margin-bottom: 1rem;
-  text-align: center;
-  transform: rotate(-2deg);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.5);
+const NavOptions = styled.div`
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-top: 2rem;
+  flex-wrap: wrap;
   
-  h3 {
-    color: white;
-    font-size: ${props => props.theme.fontlg};
-    text-transform: uppercase;
-    margin: 0;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+  @media (max-width: 768px) {
+    flex-direction: column;
+    align-items: center;
   }
 `;
 
-const BackButton = styled.button`
-  margin-top: 3rem;
-  padding: 0.8rem 2rem;
-  background: rgba(48, 129, 237, 0.3);
-  border: 1px solid #3081ed;
-  border-radius: 50px;
-  color: white;
-  font-size: ${props => props.theme.fontsm};
+const NavButton = styled(Link)`
+  background-color: ${props => props.$primary ? 'rgba(174, 255, 0, 0.8)' : 'transparent'};
+  color: ${props => props.$primary ? '#000000' : '#aeff00'};
+  border: ${props => props.$primary ? 'none' : '2px solid #aeff00'};
+  padding: 0.8rem 1.5rem;
+  border-radius: 30px;
+  font-size: 1rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
   
   &:hover {
-    background: rgba(48, 129, 237, 0.5);
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(174, 255, 0, 0.3);
+  }
+`;
+
+const Message = styled.div`
+  color: #ffffff;
+  background: rgba(108, 0, 255, 0.2);
+  border: 1px solid rgba(108, 0, 255, 0.4);
+  border-radius: 10px;
+  padding: 1rem;
+  max-width: 600px;
+  margin: 2rem auto;
+  text-align: center;
+  
+  h3 {
+    color: #aeff00;
+    margin-bottom: 0.5rem;
+  }
+  
+  p {
+    line-height: 1.6;
   }
 `;
 
 const Astroverse = () => {
-  const [spaceBabyData, setSpaceBabyData] = useState(null);
-  const [fromSoulGeneration, setFromSoulGeneration] = useState(false);
-  const [click, setClick] = useState(false);
-  const [imageError, setImageError] = useState(false);
-  const navigate = useNavigate();
-
-  // Default fallback image - update this path to a valid image in your project
-  const defaultImage = 'https://i.postimg.cc/HswdNhLx/image-10.png';
-
+  const [spaceBaby, setSpaceBaby] = useState(null);
+  const [stars, setStars] = useState([]);
+  const sectionRef = useRef(null);
+  const tlRef = useRef(null);
+  
+  // Generate stars for the background
   useEffect(() => {
-    // Check if user came from soul generation
-    const fromGeneration = sessionStorage.getItem('fromSoulGeneration') === 'true';
-    setFromSoulGeneration(fromGeneration);
-
-    // Get Space Baby data from sessionStorage
-    try {
-      const image = sessionStorage.getItem('spaceBabyImage');
-      const walletAddress = sessionStorage.getItem('walletAddress');
-      const metadataUri = sessionStorage.getItem('metadataUri');
-      const metadataString = sessionStorage.getItem('spaceBabyMetadata');
-      
-      console.log("Retrieved image from sessionStorage:", image);
-      
-      let metadata = null;
-      if (metadataString) {
-        try {
-          metadata = JSON.parse(metadataString);
-        } catch (e) {
-          console.error('Error parsing metadata JSON:', e);
-        }
-      }
-      
-      let validImageUrl = image;
-      
-      // Validate image URL format
-      if (image) {
-        // If it's a base64 image but missing the prefix
-        if (image.startsWith('/9j/') || image.startsWith('iVBOR')) {
-          validImageUrl = `data:image/jpeg;base64,${image}`;
-          console.log("Added data:image prefix to base64 string");
-        }
-        // If it's a relative path (missing http)
-        else if (!image.startsWith('data:') && !image.startsWith('http') && !image.startsWith('/')) {
-          validImageUrl = `/${image}`;
-          console.log("Converted to relative path:", validImageUrl);
-        }
-      } else {
-        validImageUrl = defaultImage;
-        console.warn("No Space Baby image found in sessionStorage, using default");
-      }
-      
-      setSpaceBabyData({
-        image: validImageUrl,
-        walletAddress,
-        metadataUri,
-        metadata,
-        name: metadata?.name || `Space Baby #${Math.floor(Math.random() * 10000)}`,
-        attributes: metadata?.attributes || [],
-      });
-        
-    } catch (error) {
-      console.error('Error retrieving Space Baby data from sessionStorage:', error);
-      // Set default data on error
-      setSpaceBabyData({
-        image: defaultImage,
-        name: `Space Baby #${Math.floor(Math.random() * 10000)}`,
-        attributes: [],
+    const generatedStars = [];
+    for (let i = 0; i < 100; i++) {
+      generatedStars.push({
+        id: i,
+        size: Math.random() * 3 + 1,
+        top: Math.random() * 100,
+        left: Math.random() * 100,
+        duration: Math.random() * 3 + 2,
+        delay: Math.random() * 5
       });
     }
-    
-    // Scroll to top when component mounts
-    window.scrollTo(0, 0);
+    setStars(generatedStars);
   }, []);
-
-  const handleBack = () => {
-    navigate('/');
-  };
-
-  return (
-    <>
-      <Navigation>
-        <Logo />
-        <HamburgerMenu click={click} onClick={() => setClick(!click)} />
-        <Menu click={click}>
-          <MenuItem onClick={() => navigate('/')}>Home</MenuItem>
-          <MenuItem onClick={() => navigate('/etherland')}>Soul Generator</MenuItem>
-          <MenuItem onClick={() => navigate('/about')}>About</MenuItem>
-          <MenuItem onClick={() => navigate('/roadmap')}>Roadmap</MenuItem>
-        </Menu>
-      </Navigation>
+  
+  // Load the minted Space Baby from session storage
+  useEffect(() => {
+    const loadSpaceBaby = () => {
+      try {
+        const currentBaby = sessionStorage.getItem('currentSpaceBaby');
+        if (currentBaby) {
+          setSpaceBaby(JSON.parse(currentBaby));
+        } else {
+          // If no specific baby, try to get the most recent from the collection
+          const savedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
+          if (savedNFTs.length > 0) {
+            // Get the most recent minted NFT
+            setSpaceBaby(savedNFTs[savedNFTs.length - 1]);
+          }
+        }
+      } catch (error) {
+        console.error('Error loading Space Baby data:', error);
+      }
+    };
+    
+    loadSpaceBaby();
+  }, []);
+  
+  // Animation when component mounts
+  useEffect(() => {
+    if (sectionRef.current) {
+      tlRef.current = gsap.timeline();
       
-      <Section>
-        <Container>
-          <Title>Welcome to Astroverse</Title>
-          
-          {fromSoulGeneration && (
-            <Subtitle>Your Space Baby Has Arrived!</Subtitle>
-          )}
-          
-          <Description>
-            Explore the cosmic universe with your newly generated Space Baby. 
-            Your digital companion will guide you through the wonders of the Astroverse.
-          </Description>
-          
-          {spaceBabyData && (
-            <SpaceBabyDisplay>
-              <BabyName>{spaceBabyData.name}</BabyName>
-              <ProfileCircle>
-                {imageError ? (
-                  <div style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center',
-                    background: '#1a1a1a',
-                    color: '#9b51e0',
-                    textAlign: 'center',
-                    padding: '1rem'
-                  }}>
-                    Space Baby<br/>Image Loading Error
-                  </div>
-                ) : (
-                  <img 
-                    src={spaceBabyData.image} 
-                    alt="Your Space Baby"
-                    onError={(e) => {
-                      console.error("Error loading image:", e, "URL was:", spaceBabyData.image);
-                      // Try fallback image
-                      if (spaceBabyData.image !== defaultImage) {
-                        e.target.src = defaultImage;
-                      } else {
-                        // If even the fallback fails, show an error message
-                        setImageError(true);
-                      }
-                    }}
-                    style={{ objectFit: 'contain' }}
-                  />
-                )}
-              </ProfileCircle>
+      // Animate the NFT elements
+      tlRef.current.fromTo(
+        '.nft-showcase',
+        {
+          opacity: 0,
+          y: 50
+        },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 1.2,
+          ease: 'power3.out'
+        }
+      );
+      
+      // Animate the NFT info
+      tlRef.current.fromTo(
+        '.nft-info',
+        {
+          opacity: 0,
+          y: 30
+        },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.8,
+          ease: 'power2.out'
+        },
+        '-=0.5' // Start a bit before the previous animation ends
+      );
+      
+      // Animate the navigation buttons
+      tlRef.current.fromTo(
+        '.nav-options',
+        {
+          opacity: 0,
+          y: 20
+        },
+        {
+          opacity: 1,
+          y: 0,
+          duration: 0.6,
+          ease: 'power2.out'
+        },
+        '-=0.3'
+      );
+    }
+  }, [spaceBaby]);
+  
+  return (
+    <Section ref={sectionRef}>
+      <StarsContainer>
+        {stars.map(star => (
+          <Star 
+            key={star.id}
+            size={star.size}
+            top={star.top}
+            left={star.left}
+            duration={star.duration}
+            delay={star.delay}
+          />
+        ))}
+      </StarsContainer>
+      
+      <Title>Welcome to the Astroverse</Title>
+      
+      <NebulaNFT>
+        {spaceBaby ? (
+          <>
+            <NFTShowcase className="nft-showcase">
+              <NFTDisplayContainer>
+                <NFTOrbitalRing />
+                <NFTSecondRing />
+                <NFTImage>
+                  <img src={spaceBaby.image} alt={spaceBaby.name} />
+                </NFTImage>
+              </NFTDisplayContainer>
+            </NFTShowcase>
+            
+            <NFTInfo className="nft-info">
+              <NFTName>{spaceBaby.name}</NFTName>
               
-              {/* Debug info - remove in production */}
-              {process.env.NODE_ENV === 'development' && (
-                <div style={{ 
-                  padding: '0.5rem', 
-                  background: 'rgba(0,0,0,0.5)', 
-                  color: 'white', 
-                  fontSize: '0.8rem',
-                  marginBottom: '1rem',
-                  maxWidth: '100%',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis'
-                }}>
-                  Image path: {spaceBabyData.image?.substring(0, 50)}{spaceBabyData.image?.length > 50 ? '...' : ''}
-                </div>
-              )}
-              
-              {spaceBabyData.metadata?.attributes && (
-                <AttributeDisplay>
-                  {Object.entries(spaceBabyData.metadata.attributes).map(([key, value], index) => (
-                    <AttributeBadge key={index}>
-                      {key}: <span>{value}</span>
-                    </AttributeBadge>
-                  ))}
-                </AttributeDisplay>
-              )}
-              
-              {spaceBabyData.walletAddress && (
-                <Description>
-                  Connected Wallet: {spaceBabyData.walletAddress.substring(0, 6)}...
-                  {spaceBabyData.walletAddress.substring(spaceBabyData.walletAddress.length - 4)}
-                </Description>
-              )}
-            </SpaceBabyDisplay>
-          )}
-          
-          <ComingSoonSection>
-            <UnderConstructionBanner>
-              <h3>Under Construction</h3>
-            </UnderConstructionBanner>
-            <ComingSoonLabel>COMING SOON</ComingSoonLabel>
-            <Subtitle>Astroverse Explorer</Subtitle>
-            <Description>
-              The Astroverse Explorer is currently under development. Soon you'll be able to navigate 
-              the cosmic realms, discover new planets, and interact with other Space Babies in our 
-              expanding universe. Our development team is working hard to bring this exciting feature to life!
-            </Description>
-          </ComingSoonSection>
-          
-          <BackButton onClick={handleBack}>
-            Return to Home
-          </BackButton>
-        </Container>
-      </Section>
-    </>
+              <AttributesTitle>Soul Attributes</AttributesTitle>
+              <AttributesContainer>
+                {spaceBaby.attributes && spaceBaby.attributes.map((attr, index) => (
+                  <AttributeTag key={index}>
+                    <span>{attr.trait_type}</span>
+                    <span>{attr.value}</span>
+                  </AttributeTag>
+                ))}
+              </AttributesContainer>
+            </NFTInfo>
+          </>
+        ) : (
+          <Message>
+            <h3>No Space Baby Found</h3>
+            <p>You haven't created a Space Baby yet. Visit Etherland to generate your cosmic companion!</p>
+          </Message>
+        )}
+        
+        <NavOptions className="nav-options">
+          <NavButton to="/etherland">Back to Etherland</NavButton>
+          <NavButton to="/profile" $primary>View Your Collection</NavButton>
+        </NavOptions>
+      </NebulaNFT>
+    </Section>
   );
 };
 

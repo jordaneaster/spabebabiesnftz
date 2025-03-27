@@ -335,16 +335,16 @@ const GuardianDashboard = () => {
         
         <StatsCard>
           <StatRow>
-            <span>Total Space Babiez:</span>
+            <span>Total Space Babiez: </span>
             <span>{guardianData.totalBabies}</span>
           </StatRow>
           <StatRow>
-            <span>Rare or Higher:</span>
+            <span>Rare or Higher: </span>
             <span>{guardianData.rareCount}</span>
           </StatRow>
           <StatRow>
-            <span>Community Points:</span>
-            <span>{guardianData.communityPoints}</span>
+            <span>Community Points: </span>
+            <span> {guardianData.communityPoints}</span>
           </StatRow>
         </StatsCard>
       </Header>

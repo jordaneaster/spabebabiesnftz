@@ -1,9 +1,7 @@
 import { createGlobalStyle } from "styled-components";
+import styled from "styled-components"; // Add this import
 import "@fontsource/akaya-telivigala"
 import "@fontsource/sora"
-
-
-
 
 const GlobalStyles = createGlobalStyle`
 
@@ -11,6 +9,7 @@ ${'' /*
 *{
     outline: 1px solid red !important;
 } */}
+
 
 *,*::before,*::after{
     margin: 0;
@@ -86,5 +85,17 @@ a{
     color: #ffc107;
   }
 `
+
+// Add or update these styles to ensure the nav elements are responsive
+export const NavRight = styled.div`
+  display: flex;
+  align-items: center;
+  
+  @media (max-width: 768px) {
+    margin-top: 15px;
+    flex-direction: column;
+    width: 100%;
+  }
+`;
 
 export default GlobalStyles;

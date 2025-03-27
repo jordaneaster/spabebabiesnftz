@@ -2,7 +2,15 @@ import React, { useState, useRef, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import gsap from 'gsap';
 import { useNavigate } from 'react-router-dom';
-// Add import for soul generator image
+// Add import for utility functions
+import { mintEthereumNFT, getEthereumBalance } from '../../utils/ethereumUtils';
+import { mintSolanaNFT, getSolanaBalance } from '../../utils/solanaUtils';
+import { 
+  ETHEREUM_TESTNET, 
+  SOLANA_TESTNET, 
+  NFT_PRICE_ETH, 
+  NFT_PRICE_SOL 
+} from '../../utils/constants';
 import soulGeneratorImg from '../../assets/soul-generator.png'; // Adjust path as needed
 
 // Background image
@@ -530,6 +538,64 @@ const GeneratorText = styled.p`
   text-align: center;
 `;
 
+// Add new styled components for Web3 integration
+const WalletInfoContainer = styled.div`
+  background: rgba(36, 37, 38, 0.9);
+  border-radius: 10px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: center;
+  border: 1px solid ${props => props.error ? '#ff4242' : '#aeff00'};
+`;
+
+const WalletAddressDisplay = styled.p`
+  color: #aeff00;
+  font-size: ${props => props.theme.fontsm};
+  margin: 0.5rem 0;
+`;
+
+const BalanceDisplay = styled.p`
+  color: white;
+  font-size: ${props => props.theme.fontsm};
+  margin: 0.5rem 0;
+  span {
+    color: #aeff00;
+    font-weight: bold;
+  }
+`;
+
+const TransactionLink = styled.a`
+  color: #aeff00;
+  text-decoration: underline;
+  margin-top: 0.8rem;
+  display: inline-block;
+  
+  &:hover {
+    color: white;
+  }
+`;
+
+const MintingIndicator = styled.div`
+  margin: 1rem auto;
+  padding: 0.8rem;
+  background: rgba(174, 255, 0, 0.15);
+  border-radius: 8px;
+  color: #aeff00;
+  max-width: 80%;
+  text-align: center;
+  animation: pulse 2s infinite;
+`;
+
+const ErrorMessage = styled.div`
+  margin: 1rem auto;
+  padding: 0.8rem;
+  background: rgba(255, 66, 66, 0.15);
+  border-radius: 8px;
+  color: #ff4242;
+  max-width: 80%;
+  text-align: center;
+`;
+
 const Etherland = () => {
   const [soulProgress, setSoulProgress] = useState(0);
   const [selectedTraits, setSelectedTraits] = useState([]);
@@ -549,6 +615,14 @@ const Etherland = () => {
   const [generatorFadeOut, setGeneratorFadeOut] = useState(false);
   
   const navigate = useNavigate();
+  
+  // Add additional state for Web3 integration
+  const [isMinting, setIsMinting] = useState(false);
+  const [mintingError, setMintingError] = useState('');
+  const [mintStatus, setMintStatus] = useState('');
+  const [sufficientFunds, setSufficientFunds] = useState(true);
+  const [networkName, setNetworkName] = useState('');
+  const [currentPrice, setCurrentPrice] = useState(0);
   
   // Generate random particles for loading animation
   const generateParticles = () => {
@@ -599,6 +673,9 @@ const Etherland = () => {
       
       // Increase soul progress
       setSoulProgress(Math.min(soulProgress + 33, 99));
+
+      // Clear any previous errors
+      setMintingError('');
     }
   };
   
@@ -656,7 +733,7 @@ const Etherland = () => {
       'Assigning Cryptonic Attributes...',
       'Generating Soul Encryption...',
       'Calculating Power Levels...',
-      'Transforming 2D to 3D...',
+      'Preparing NFT Metadata...',
       'Finalizing Soul Generation...',
       'Soul Generation Complete! Entering Astroverse...'
     ];
@@ -750,6 +827,240 @@ const Etherland = () => {
     preloadAstroverse();
   }, []);
   
+  // Modified wallet connection check
+  const checkWalletConnection = async () => {
+    // Check for MetaMask
+    if (window.ethereum) {
+      try {
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setWalletConnected(true);
+          setWalletType('metamask');
+          setWalletAddress(accounts[0]);
+          setNetworkName(ETHEREUM_TESTNET.name);
+          setCurrentPrice(NFT_PRICE_ETH);
+          
+          // Check wallet balance
+          const balance = await getEthereumBalance(accounts[0]);
+          setSufficientFunds(balance >= NFT_PRICE_ETH);
+          
+          setStatusMessage('Wallet already connected: ' + accounts[0].substring(0, 6) + '...' + accounts[0].substring(38));
+        }
+      } catch (error) {
+        console.error("Error checking MetaMask connection:", error);
+      }
+    }
+    
+    // Check for Phantom
+    if (window.solana && window.solana.isPhantom) {
+      try {
+        const response = await window.solana.connect({ onlyIfTrusted: true });
+        if (response.publicKey) {
+          setWalletConnected(true);
+          setWalletType('phantom');
+          setWalletAddress(response.publicKey.toString());
+          setNetworkName(SOLANA_TESTNET.name);
+          setCurrentPrice(NFT_PRICE_SOL);
+          
+          // Check wallet balance
+          const balance = await getSolanaBalance(response.publicKey.toString());
+          setSufficientFunds(balance >= NFT_PRICE_SOL);
+          
+          setStatusMessage('Wallet already connected: ' + response.publicKey.toString().substring(0, 6) + '...');
+        }
+      } catch (error) {
+        // User hasn't authorized the app or wallet not previously connected
+        console.error("Phantom not previously connected:", error);
+      }
+    }
+  };
+  
+  // Connect wallet functions
+  const connectMetamask = async () => {
+    if (!window.ethereum) {
+      alert("MetaMask not detected! Please install MetaMask extension.");
+      return;
+    }
+    
+    try {
+      setIsGenerating(true);
+      setGenerationStage(0);
+      setStatusMessage("Requesting MetaMask connection...");
+      updateProgress(0, 10, 2000);
+      
+      // Use window.ethereum directly if ethers.js is not available
+      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+      
+      setWalletConnected(true);
+      setWalletType('metamask');
+      setWalletAddress(accounts[0]);
+      setStatusMessage("Connected to MetaMask: " + accounts[0].substring(0, 6) + '...' + accounts[0].substring(38));
+      setNetworkName(ETHEREUM_TESTNET.name);
+      setCurrentPrice(NFT_PRICE_ETH);
+      
+      // Check wallet balance
+      try {
+        const balance = await getEthereumBalance(accounts[0]);
+        setSufficientFunds(balance >= NFT_PRICE_ETH);
+        if (balance < NFT_PRICE_ETH) {
+          setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_ETH} ETH to mint.`);
+        }
+      } catch (error) {
+        console.error("Error checking balance:", error);
+      }
+      
+      updateProgress(10, 15, 1000);
+      
+      // Move to next stage after wallet connected
+      setTimeout(() => {
+        setGenerationStage(1);
+        requestWalletSignature();
+      }, 3000);
+    } catch (error) {
+      console.error("Error connecting to MetaMask:", error);
+      setStatusMessage("Failed to connect to MetaMask: " + (error.message || 'Unknown error'));
+      setIsGenerating(false);
+      setMintingError(error.message || 'Failed to connect to MetaMask');
+    }
+  };
+  
+  const connectPhantom = async () => {
+    if (!window.solana || !window.solana.isPhantom) {
+      alert("Phantom wallet not detected! Please install Phantom extension.");
+      return;
+    }
+    
+    try {
+      setIsGenerating(true);
+      setGenerationStage(0);
+      setStatusMessage("Requesting Phantom connection...");
+      updateProgress(0, 10, 2000);
+      
+      const response = await window.solana.connect();
+      setWalletConnected(true);
+      setWalletType('phantom');
+      setWalletAddress(response.publicKey.toString());
+      setStatusMessage("Connected to Phantom: " + response.publicKey.toString().substring(0, 6) + '...');
+      setNetworkName(SOLANA_TESTNET.name);
+      setCurrentPrice(NFT_PRICE_SOL);
+      
+      // Check wallet balance
+      try {
+        const balance = await getSolanaBalance(response.publicKey.toString());
+        setSufficientFunds(balance >= NFT_PRICE_SOL);
+        if (balance < NFT_PRICE_SOL) {
+          setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
+        }
+      } catch (error) {
+        console.error("Error checking balance:", error);
+      }
+      
+      updateProgress(10, 15, 1000);
+      
+      // Move to next stage after wallet connected
+      setTimeout(() => {
+        setGenerationStage(1);
+        requestWalletSignature();
+      }, 3000);
+    } catch (error) {
+      console.error("Error connecting to Phantom:", error);
+      setStatusMessage("Failed to connect to Phantom: " + error.message);
+      setIsGenerating(false);
+      setMintingError(error.message || 'Failed to connect to Phantom');
+    }
+  };
+
+  // Modify the prepare for minting function to include actual minting
+  const prepareForMinting = async () => {
+    setStatusMessage("Preparing your Space Baby for minting...");
+    updateProgress(75, 85, 2000);
+    
+    try {
+      if (!walletConnected) {
+        throw new Error("Wallet not connected. Please connect your wallet to mint.");
+      }
+      
+      if (!sufficientFunds) {
+        throw new Error(`Insufficient funds. You need at least ${currentPrice} ${walletType === 'metamask' ? 'ETH' : 'SOL'} to mint.`);
+      }
+      
+      setStatusMessage("Beginning minting process...");
+      setIsMinting(true);
+      
+      // Prepare metadata
+      const metadata = {
+        name: `Space Baby #${Math.floor(Math.random() * 10000)}`,
+        description: "A unique Space Baby from the Etherland metaverse",
+        image: sessionStorage.getItem('spaceBabyImage') || "https://i.postimg.cc/GmQ6XVFR/image-Team-Dez.png",
+        attributes: nftAttributes ? Object.entries(nftAttributes).map(([trait_type, value]) => ({
+          trait_type,
+          value
+        })) : []
+      };
+      
+      let result;
+      
+      // Call the appropriate minting function based on wallet type
+      if (walletType === 'metamask') {
+        setMintStatus('Minting your Space Baby on Ethereum...');
+        result = await mintEthereumNFT(walletAddress, metadata, ETHEREUM_TESTNET);
+        setTransactionHash(result.transactionHash);
+      } else if (walletType === 'phantom') {
+        setMintStatus('Minting your Space Baby on Solana...');
+        result = await mintSolanaNFT(walletAddress, metadata, SOLANA_TESTNET);
+        setTransactionHash(result.signature);
+      }
+      
+      setMintStatus('NFT minted successfully!');
+      updateProgress(85, 95, 1000);
+      
+      // Move to final stage
+      setTimeout(() => {
+        setGenerationStage(5);
+        completeSoulGeneration();
+      }, 1000);
+    } catch (error) {
+      console.error("Error preparing for minting:", error);
+      setStatusMessage("Failed to mint: " + (error.message || 'Unknown error'));
+      setMintingError(error.message || 'Failed to mint your NFT');
+      setIsGenerating(false);
+    } finally {
+      setIsMinting(false);
+    }
+  };
+
+  // Add useEffect to check wallet balance when wallet is connected
+  useEffect(() => {
+    if (walletConnected && walletAddress) {
+      const checkBalance = async () => {
+        try {
+          if (walletType === 'metamask') {
+            const balance = await getEthereumBalance(walletAddress);
+            setSufficientFunds(balance >= NFT_PRICE_ETH);
+            if (balance < NFT_PRICE_ETH) {
+              setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_ETH} ETH to mint.`);
+            } else {
+              setMintingError('');
+            }
+          } else if (walletType === 'phantom') {
+            const balance = await getSolanaBalance(walletAddress);
+            setSufficientFunds(balance >= NFT_PRICE_SOL);
+            if (balance < NFT_PRICE_SOL) {
+              setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
+            } else {
+              setMintingError('');
+            }
+          }
+        } catch (error) {
+          console.error("Error checking wallet balance:", error);
+        }
+      };
+      
+      checkBalance();
+    }
+  }, [walletConnected, walletAddress, walletType]);
+
+  // Modified return JSX to include Web3 components
   return (
     <>
       <Section id="etherland" ref={sectionRef}>
@@ -779,12 +1090,54 @@ const Etherland = () => {
               </BabyImage>
             </BabyContainer>
             
+            {walletConnected && (
+              <WalletInfoContainer error={!sufficientFunds}>
+                <h4 style={{ color: '#aeff00', margin: 0 }}>Wallet Connected</h4>
+                <WalletAddressDisplay>
+                  {walletType === 'metamask' ? 'MetaMask' : 'Phantom'}: {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                </WalletAddressDisplay>
+                <BalanceDisplay>
+                  Network: <span>{networkName}</span>
+                </BalanceDisplay>
+                <BalanceDisplay>
+                  Mint Price: <span>{walletType === 'metamask' ? `${NFT_PRICE_ETH} ETH` : `${NFT_PRICE_SOL} SOL`}</span>
+                </BalanceDisplay>
+                {transactionHash && (
+                  <TransactionLink 
+                    href={`${walletType === 'metamask' ? ETHEREUM_TESTNET.blockExplorer : SOLANA_TESTNET.blockExplorer}/tx/${transactionHash}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    View Transaction
+                  </TransactionLink>
+                )}
+              </WalletInfoContainer>
+            )}
+            
+            {isMinting && mintStatus && (
+              <MintingIndicator>{mintStatus}</MintingIndicator>
+            )}
+            
+            {mintingError && (
+              <ErrorMessage>{mintingError}</ErrorMessage>
+            )}
+            
             <ProgressContainer>
               <h3 style={{ color: '#aeff00', marginBottom: '0.5rem', textAlign: 'center' }}>Soul Generation Progress</h3>
               <ProgressBar>
                 <Progress progress={soulProgress} />
               </ProgressBar>
             </ProgressContainer>
+            
+            {!walletConnected && (
+              <div style={{ textAlign: 'center', margin: '1rem 0' }}>
+                <h3 style={{ color: '#aeff00', marginBottom: '1rem' }}>Connect Your Wallet to Begin</h3>
+                <div style={{ display: 'flex', justifyContent: 'center', gap: '1rem', flexWrap: 'wrap' }}>
+                  <Button onClick={connectMetamask}>Connect MetaMask</Button>
+                  <Button onClick={connectPhantom}>Connect Phantom</Button>
+                </div>
+              </div>
+            )}
             
             <h3 style={{ color: '#aeff00', marginBottom: '1rem', textAlign: 'center' }}>Select up to 3 traits for your Space Baby's soul</h3>
             
@@ -803,9 +1156,9 @@ const Etherland = () => {
             
             <Button 
               onClick={completeSoulGeneration}
-              disabled={selectedTraits.length < 3 || soulProgress >= 100}
+              disabled={selectedTraits.length < 3 || soulProgress >= 100 || !walletConnected || !sufficientFunds || isMinting}
             >
-              {soulProgress >= 100 ? "Soul Generated" : "Generate Soul"}
+              {soulProgress >= 100 ? "Soul Generated" : !sufficientFunds ? "Insufficient Funds" : isMinting ? "Minting..." : "Generate Soul & Mint NFT"}
             </Button>
           </SoulGenerationContainer>
         </Content>
@@ -845,7 +1198,7 @@ const Etherland = () => {
       {/* Integrated Cryptonic Soul Generator */}
       <IntegratedLoadingOverlay show={showGenerator} fadeOut={generatorFadeOut}>
         <GeneratorTitle>3D CRYPTONIC SOUL GENERATOR</GeneratorTitle>
-        <GeneratorImage src={soulGeneratorImg} alt="Soul Generator" /> {/* Use imported image */}
+        <GeneratorImage src={soulGeneratorImg} alt="Soul Generator" />
         <GeneratorText>{generatorText}</GeneratorText>
         <GeneratorProgressBar>
           <GeneratorProgress width={generatorProgress} />

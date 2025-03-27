@@ -1,225 +1,187 @@
-import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import styled from 'styled-components';
+import { useUserAuth } from '../context/UserAuthContext';
 
-const NavContainer = styled.nav`
-  width: 100%;
-  padding: 1rem 3rem;
+const NavbarContainer = styled.nav`
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(10px);
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  position: relative;
-  z-index: 10;
-  background: rgba(36, 37, 38, 0.9);
-  backdrop-filter: blur(15px);
-  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
-
-  @media (max-width: 64em) {
-    padding: 1rem 2rem;
-  }
-
-  @media (max-width: 48em) {
-    flex-wrap: wrap;
-  }
+  padding: 0.5rem 2rem;
+  z-index: 1000;
+  border-bottom: 1px solid rgba(174, 255, 0, 0.3);
 `;
 
-const LogoContainer = styled(Link)`
-  display: flex;
-  align-items: center;
+const Logo = styled(Link)`
+  color: #AEFF00;
+  font-size: 1.5rem;
+  font-weight: bold;
   text-decoration: none;
-  color: ${props => props.theme.text};
-  font-size: ${props => props.theme.fontlg};
-  font-weight: 700;
-  
-  span {
-    background: linear-gradient(90deg, #9b51e0 0%, #3081ed 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    margin-left: 0.5rem;
-  }
+  font-family: 'flegrei', sans-serif;
 `;
 
-const MenuItems = styled.ul`
+const NavLinks = styled.div`
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  list-style: none;
   
-  @media (max-width: 48em) {
-    width: 100%;
-    justify-content: center;
-    margin-top: ${props => props.mobileMenuOpen ? '1rem' : 0};
-    height: ${props => props.mobileMenuOpen ? 'auto' : 0};
-    overflow: ${props => props.mobileMenuOpen ? 'visible' : 'hidden'};
-    transition: all 0.3s ease;
+  @media (max-width: 768px) {
+    display: ${({ isOpen }) => (isOpen ? 'flex' : 'none')};
+    flex-direction: column;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.9);
+    padding: 1rem;
+    gap: 1rem;
   }
 `;
 
-const MenuItem = styled.li`
+const NavLink = styled(Link)`
+  color: #FFFFFF;
+  text-decoration: none;
   margin: 0 1rem;
-  color: ${props => props.theme.text};
-  
-  @media (max-width: 48em) {
-    margin: 0.5rem;
-  }
-`;
-
-const MenuLink = styled(Link)`
-  text-decoration: none;
-  color: ${props => props.active ? '#9b51e0' : 'inherit'};
-  font-size: ${props => props.theme.fontmd};
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  transition: all 0.2s ease;
+  transition: color 0.3s ease;
+  white-space: nowrap;
   
   &:hover {
-    color: #9b51e0;
+    color: #AEFF00;
   }
   
-  @media (max-width: 48em) {
-    font-size: ${props => props.theme.fontmd};
+  @media (max-width: 768px) {
+    margin: 0.5rem 0;
   }
 `;
 
-const MobileMenuButton = styled.button`
+const ProfileLink = styled(NavLink)`
+  color: #AEFF00;
+  border: 1px solid #AEFF00;
+  border-radius: 20px;
+  padding: 0.3rem 1rem;
+  
+  &:hover {
+    background: rgba(174, 255, 0, 0.1);
+  }
+`;
+
+const MenuButton = styled.button`
   display: none;
   background: transparent;
   border: none;
-  color: ${props => props.theme.text};
+  color: #AEFF00;
   font-size: 1.5rem;
   cursor: pointer;
   
-  @media (max-width: 48em) {
+  @media (max-width: 768px) {
     display: block;
   }
 `;
 
-const WalletButton = styled.button`
-  background: linear-gradient(90deg, #9b51e0 0%, #3081ed 100%);
-  color: white;
-  padding: 0.5rem 1.5rem;
+// Add a styled disconnect button
+const DisconnectButton = styled.button`
+  background: transparent;
+  color: #FF5252;
+  border: 2px solid #FF5252;
   border-radius: 50px;
-  border: none;
-  cursor: pointer;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
   font-weight: bold;
+  cursor: pointer;
   transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'flegrei', sans-serif;
+  margin-left: 15px;
   
   &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 5px 10px rgba(155, 81, 224, 0.3);
+    background: rgba(255, 82, 82, 0.1);
+    transform: translateY(-2px);
   }
-  
-  @media (max-width: 48em) {
-    display: ${props => props.mobileMenuOpen ? 'block' : 'none'};
-    margin-top: 1rem;
+
+  @media (max-width: 768px) {
+    margin-top: 10px;
+    margin-left: 0;
   }
 `;
 
+// Add wallet indicator
+const WalletIndicator = styled.div`
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+  
+  @media (max-width: 768px) {
+    margin-right: 0;
+    margin-bottom: 10px;
+  }
+`;
+
+const WalletBadge = styled.span`
+  background: ${props => props.type === 'phantom' ? '#8A2BE2' : '#F6851B'};
+  color: white;
+  border-radius: 50%;
+  width: 10px;
+  height: 10px;
+  display: inline-block;
+  margin-right: 5px;
+`;
+
+const WalletText = styled.span`
+  color: #AEFF00;
+  font-size: 0.8rem;
+`;
+
 const Navbar = () => {
-  const [currentPath, setCurrentPath] = useState('');
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [walletAddress, setWalletAddress] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const { logout, walletType } = useUserAuth();
+  const navigate = useNavigate();
   
-  useEffect(() => {
-    // Set current path for active link styling
-    setCurrentPath(window.location.pathname);
-    
-    // Check if wallet is connected (from session storage or browser)
-    const checkWalletConnection = async () => {
-      const storedWallet = sessionStorage.getItem('walletAddress');
-      
-      if (storedWallet) {
-        setWalletConnected(true);
-        setWalletAddress(storedWallet);
-        return;
-      }
-      
-      // Check browser wallets
-      if (window.ethereum) {
-        try {
-          const accounts = await window.ethereum.request({ method: 'eth_accounts' });
-          if (accounts.length > 0) {
-            setWalletConnected(true);
-            setWalletAddress(accounts[0]);
-          }
-        } catch (error) {
-          console.error("Error checking wallet connection:", error);
-        }
-      }
-      
-      if (window.solana && window.solana.isPhantom) {
-        try {
-          const resp = await window.solana.connect({ onlyIfTrusted: true });
-          if (resp.publicKey) {
-            setWalletConnected(true);
-            setWalletAddress(resp.publicKey.toString());
-          }
-        } catch (error) {
-          // User hasn't connected before
-        }
-      }
-    };
-    
-    checkWalletConnection();
-  }, []);
-  
-  const toggleMobileMenu = () => {
-    setMobileMenuOpen(!mobileMenuOpen);
+  const toggleMenu = () => {
+    setMenuOpen(!menuOpen);
   };
-  
-  const formatWalletAddress = (address) => {
-    if (!address) return "";
-    return `${address.substring(0, 4)}...${address.substring(address.length - 4)}`;
+
+  const handleLogout = async () => {
+    const success = await logout();
+    if (success) {
+      // Redirect to home page after logout
+      navigate('/');
+      // Reload to refresh state completely
+      window.location.reload();
+    } else {
+      alert("There was an issue logging out. Please try again.");
+    }
   };
   
   return (
-    <NavContainer>
-      <LogoContainer to="/">
-        <span>🚀 Space Babiez</span>
-      </LogoContainer>
+    <NavbarContainer>
+      <Logo to="/">Space Babiez</Logo>
       
-      <MobileMenuButton onClick={toggleMobileMenu}>
-        ☰
-      </MobileMenuButton>
+      <MenuButton onClick={toggleMenu}>
+        {menuOpen ? '✕' : '☰'}
+      </MenuButton>
       
-      <MenuItems mobileMenuOpen={mobileMenuOpen}>
-        <MenuItem>
-          <MenuLink to="/" active={currentPath === '/'}>
-            🏠 Home
-          </MenuLink>
-        </MenuItem>
-        <MenuItem>
-          <MenuLink to="/gallery" active={currentPath === '/gallery'}>
-            🖼️ Gallery
-          </MenuLink>
-        </MenuItem>
-        <MenuItem>
-          <MenuLink to="/profile" active={currentPath === '/profile'}>
-            👤 My Profile
-          </MenuLink>
-        </MenuItem>
-        <MenuItem>
-          <MenuLink to="/etherland" active={currentPath === '/etherland'}>
-            🚀 Generate Baby
-          </MenuLink>
-        </MenuItem>
-      </MenuItems>
-      
-      {walletConnected ? (
-        <WalletButton mobileMenuOpen={mobileMenuOpen}>
-          {formatWalletAddress(walletAddress)}
-        </WalletButton>
-      ) : (
-        <WalletButton 
-          mobileMenuOpen={mobileMenuOpen}
-          onClick={() => window.location.href = '/etherland'}
-        >
-          Connect Wallet
-        </WalletButton>
-      )}
-    </NavContainer>
+      <NavLinks isOpen={menuOpen}>
+        <NavLink to="/">Home</NavLink>
+        <NavLink to="/etherland">Etherland</NavLink>
+        <NavLink to="/marketplace">Marketplace</NavLink>
+        <ProfileLink to="/profile">Profile</ProfileLink>
+        <NavLink to="/settings">Settings</NavLink>
+      </NavLinks>
+
+      <WalletIndicator>
+        <WalletBadge type={walletType || 'phantom'} />
+        <WalletText>{walletType || 'Phantom'}</WalletText>
+      </WalletIndicator>
+      <DisconnectButton onClick={handleLogout}>
+        Disconnect
+      </DisconnectButton>
+    </NavbarContainer>
   );
 };
 
