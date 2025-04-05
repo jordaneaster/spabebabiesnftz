@@ -55,7 +55,7 @@ const HomeContainer = styled.div`
     left: 0;
     right: 0;
     bottom: 0;
-    background-image: url('https://i.postimg.cc/L8ZN3HS2/etherland-bg.jpg');
+    background-image: url('https://i.ibb.co/KmNP8vD/space-background.jpg'); /* Updated to a valid image URL */
     background-size: cover;
     opacity: 0.2;
     z-index: 0;

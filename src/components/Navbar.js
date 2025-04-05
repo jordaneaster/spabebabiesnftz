@@ -3,6 +3,13 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import styled from 'styled-components';
 import { useUserAuth } from '../context/UserAuthContext';
 import { NavRight } from '../styles/GlobalStyles';
+import { 
+  isWalletConnected, 
+  getWalletAddress, 
+  connectPhantomWallet,
+  disconnectPhantomWallet,
+  autoConnectPhantomWallet
+} from '../utils/walletStateManager';
 
 const NavbarContainer = styled.nav`
   background: rgba(0, 0, 0, 0.8);
@@ -202,67 +209,129 @@ const WalletText = styled.span`
   font-size: 0.8rem;
 `;
 
+const Button = styled.button`
+  background: linear-gradient(90deg, #9945FF, #14F195);
+  color: white;
+  border: none;
+  border-radius: 50px;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  font-weight: bold;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  font-family: 'flegrei', sans-serif;
+  
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(153, 69, 255, 0.3);
+  }
+
+  @media (max-width: 768px) {
+    margin: 0.5rem 0;
+    width: 100%;
+  }
+`;
+
 const Navbar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const { logout, walletType, currentUser } = useUserAuth();
   const [localWalletConnected, setLocalWalletConnected] = useState(false);
+  const [walletAddress, setWalletAddress] = useState('');
   const navigate = useNavigate();
   const location = useLocation();
   
-  // Check if wallet is connected on mount
+  // Check if wallet is connected on mount and listen for connection changes
   useEffect(() => {
     const checkWalletConnection = async () => {
-      // Check for Phantom connection
-      if (window.solana && window.solana.isPhantom) {
-        try {
-          // More reliable check for Phantom connection
-          const response = await window.solana.connect({ onlyIfTrusted: true }).catch(() => null);
-          setLocalWalletConnected(!!response);
-        } catch (error) {
-          console.error("Error checking Phantom connection:", error);
-        }
+      // Check our central wallet state first
+      if (isWalletConnected()) {
+        const address = getWalletAddress();
+        setLocalWalletConnected(true);
+        setWalletAddress(address || '');
+        return;
+      }
+      
+      // Try auto-connect if we don't have a stored connection
+      const result = await autoConnectPhantomWallet();
+      if (result && result.address) {
+        setLocalWalletConnected(true);
+        setWalletAddress(result.address);
       }
     };
     
     checkWalletConnection();
     
-    // Also set connected if we have a currentUser
+    // Also set connected if we have a currentUser with a wallet address
     if (currentUser && currentUser.wallet_address) {
       setLocalWalletConnected(true);
+      setWalletAddress(currentUser.wallet_address);
     }
+    
+    // Listen for wallet connection/disconnection events
+    const handleWalletConnected = (event) => {
+      setLocalWalletConnected(true);
+      setWalletAddress(event.detail.address || '');
+    };
+    
+    const handleWalletDisconnected = () => {
+      setLocalWalletConnected(false);
+      setWalletAddress('');
+    };
+    
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+    
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
   }, [currentUser]);
   
   const toggleMenu = () => {
     setMenuOpen(!menuOpen);
   };
 
+  // Update handleLogout to use our centralized disconnection method
   const handleLogout = async () => {
-    // Set a flag to prevent auto-reconnection
-    localStorage.setItem('walletDisconnected', 'true');
-    
-    // Disconnect from Phantom wallet if it exists
-    if (window.solana && window.solana.isPhantom) {
-      try {
-        await window.solana.disconnect();
-        console.log("Disconnected from Phantom wallet");
-      } catch (error) {
-        console.error("Error disconnecting from Phantom:", error);
+    try {
+      // Disconnect the wallet using our centralized method
+      await disconnectPhantomWallet();
+      setLocalWalletConnected(false);
+      setWalletAddress('');
+      
+      // Also log out from the auth context
+      const success = await logout();
+      if (success) {
+        navigate('/');
+      } else {
+        console.warn("Auth logout didn't return success, but wallet was disconnected");
       }
-    }
-    
-    setLocalWalletConnected(false);
-    
-    const success = await logout();
-    if (success) {
-      navigate('/');
-      window.location.reload();
-    } else {
+    } catch (error) {
+      console.error("Error during logout:", error);
       alert("There was an issue logging out. Please try again.");
     }
   };
   
-  // Check if a user is connected with a wallet (using both methods)
-  const isWalletConnected = localWalletConnected || (!!currentUser && !!currentUser.wallet_address);
+  // Add a connectWallet function that uses our centralized method
+  const handleConnectWallet = async () => {
+    try {
+      const result = await connectPhantomWallet();
+      if (result && result.address) {
+        setLocalWalletConnected(true);
+        setWalletAddress(result.address);
+      }
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      alert(`Failed to connect wallet: ${error.message || "Unknown error"}`);
+    }
+  };
+  
+  // Check if a user is connected with a wallet (using central state and context)
+  const isWalletConnectedState = localWalletConnected || 
+    (!!currentUser && !!currentUser.wallet_address) ||
+    isWalletConnected();
   
   return (
     <NavbarContainer>
@@ -292,29 +361,26 @@ const Navbar = () => {
             <NavLink to="/manager" $active={location.pathname === '/manager'}>
               Manager
             </NavLink>
-            <NavLink to="/contracts" $active={location.pathname === '/contracts'}>
-              Contracts
-            </NavLink>
             <ProfileLink to="/profile" $active={location.pathname === '/profile'}>
               Profile
             </ProfileLink>
             
             {/* Always show the User Section with conditional wallet info */}
             <UserSection>
-              {isWalletConnected && (
+              {!isWalletConnectedState && (
+                <Button onClick={handleConnectWallet}>
+                  Connect Wallet
+                </Button>
+              )}
+              {isWalletConnectedState && (
                 <WalletIndicator>
                   <WalletBadge />
                   <WalletText>Phantom</WalletText>
                 </WalletIndicator>
               )}
-              {isWalletConnected && (
+              {isWalletConnectedState && (
                 <DisconnectButton onClick={handleLogout}>
                   Disconnect
-                </DisconnectButton>
-              )}
-              {!isWalletConnected && window.solana?.isConnected && (
-                <DisconnectButton onClick={handleLogout}>
-                  Disconnect Wallet
                 </DisconnectButton>
               )}
             </UserSection>

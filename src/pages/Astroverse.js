@@ -2,6 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import styled, { keyframes } from 'styled-components';
 import gsap from 'gsap';
 import { Link } from 'react-router-dom';
+import supabase from '../utils/supabaseConfig';
+import TABLES from '../utils/supabaseSchema';
+import { connectPhantomWallet } from '../utils/walletUtils';
+import Navbar from '../components/Navbar';
 
 // Animations
 const float = keyframes`
@@ -101,6 +105,8 @@ const CitizenBadge = styled.div`
   padding: 1.5rem;
   animation: ${fadeSlideIn} 0.8s ease-out forwards;
   backdrop-filter: blur(10px);
+  display: flex;
+  flex-direction: column;
   
   h3 {
     color: #aeff00;
@@ -418,10 +424,10 @@ const NFTDisplayContainer = styled.div`
   position: relative;
   width: 280px;
   height: 280px;
-  margin: 0 auto;
-  margin-bottom: 2rem;
+  margin: 0 auto 2rem;
   overflow: visible;
-  left: 0%;
+  order: -1;
+  
   @media (max-width: 768px) {
     width: 240px;
     height: 240px;
@@ -505,7 +511,7 @@ const NFTImage = styled.div`
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: 50%; /* Ensures the image itself is rounded */
+    border-radius: 50%;
     position: absolute;
     top: 50%;
     left: 50%;
@@ -531,7 +537,7 @@ const NFTImage = styled.div`
 const AttributesTitle = styled.h3`
   color: #ffffff;
   font-size: 1.2rem;
-  margin-top: 2rem; /* Reduced from 4rem to 2rem since we moved image up */
+  margin-top: 2rem;
   margin-bottom: 1rem;
   text-align: center;
   display: flex;
@@ -651,12 +657,153 @@ const ActionButton = styled.button`
   }
 `;
 
+const BabiesGallery = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 1.5rem;
+  margin-top: 2rem;
+  width: 100%;
+`;
+
+const BabyCard = styled.div`
+  background: rgba(20, 20, 40, 0.6);
+  border: 1px solid rgba(174, 255, 0, 0.3);
+  border-radius: 15px;
+  padding: 1rem;
+  transition: all 0.3s ease;
+  cursor: pointer;
+  position: relative;
+  
+  &.selected {
+    border: 2px solid #aeff00;
+    box-shadow: 0 0 15px rgba(174, 255, 0, 0.5);
+    transform: translateY(-5px);
+    
+    &::after {
+      content: '✓';
+      position: absolute;
+      top: -10px;
+      right: -10px;
+      background: #aeff00;
+      color: black;
+      width: 25px;
+      height: 25px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+  }
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 5px 15px rgba(174, 255, 0, 0.3);
+  }
+`;
+
+const BabyImage = styled.div`
+  width: 100%;
+  aspect-ratio: 1;
+  border-radius: 10px;
+  overflow: hidden;
+  margin-bottom: 1rem;
+  
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 10px;
+  }
+`;
+
+const BabyName = styled.h4`
+  color: #aeff00;
+  font-size: 1rem;
+  margin-bottom: 0.5rem;
+  text-align: center;
+`;
+
+const BabyId = styled.p`
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 0.8rem;
+  text-align: center;
+`;
+
+const LoadMoreButton = styled.button`
+  background: linear-gradient(90deg, #6c00ff 0%, #aeff00 100%);
+  border: none;
+  color: black;
+  padding: 0.7rem 1.5rem;
+  border-radius: 25px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin: 2rem auto;
+  display: block;
+  
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 5px 15px rgba(108, 0, 255, 0.4);
+  }
+`;
+
+const GalleryTab = styled.button`
+  background: ${props => props.active ? 'rgba(174, 255, 0, 0.2)' : 'transparent'};
+  border: 1px solid ${props => props.active ? '#aeff00' : 'rgba(255, 255, 255, 0.3)'};
+  color: ${props => props.active ? '#aeff00' : '#ffffff'};
+  padding: 0.6rem 1.2rem;
+  border-radius: 20px;
+  margin-right: 0.8rem;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  
+  &:hover {
+    background: rgba(174, 255, 0, 0.1);
+  }
+`;
+
+const GalleryContainer = styled.div`
+  margin-top: 1rem;
+  width: 100%;
+`;
+
+const ConnectPrompt = styled.div`
+  background: rgba(20, 20, 40, 0.6);
+  border: 1px solid rgba(174, 255, 0, 0.3);
+  border-radius: 15px;
+  padding: 2rem;
+  margin: 2rem 0;
+  text-align: center;
+  
+  p {
+    color: white;
+    margin-bottom: 1.5rem;
+  }
+`;
+
+const SectionTitle = styled.h3`
+  color: #aeff00;
+  font-size: 1.3rem;
+  margin: 2rem 0 1rem;
+  text-align: center;
+  border-bottom: 1px solid rgba(174, 255, 0, 0.3);
+  padding-bottom: 0.5rem;
+`;
+
 const Astroverse = () => {
-  const [spaceBaby, setSpaceBaby] = useState(null);
+  const [spaceBabies, setSpaceBabies] = useState([]);
+  const [selectedBaby, setSelectedBaby] = useState(null);
   const [stars, setStars] = useState([]);
   const [activeTab, setActiveTab] = useState('benefits');
+  const [activeGalleryView, setActiveGalleryView] = useState('all');
   const [votes, setVotes] = useState({});
   const [loadingProgress, setLoadingProgress] = useState(35);
+  const [isLoading, setIsLoading] = useState(true);
+  const [walletAddress, setWalletAddress] = useState('');
   const sectionRef = useRef(null);
   const tlRef = useRef(null);
   
@@ -676,41 +823,192 @@ const Astroverse = () => {
     setStars(generatedStars);
   }, []);
   
-  // Load the minted Space Baby from session storage
+  // Check for wallet connection and load Space Babies
   useEffect(() => {
-    const loadSpaceBaby = () => {
+    const checkWalletAndLoadBabies = async () => {
       try {
-        const currentBaby = sessionStorage.getItem('currentSpaceBaby');
-        if (currentBaby) {
-          setSpaceBaby(JSON.parse(currentBaby));
-        } else {
-          // If no specific baby, try to get the most recent from the collection
-          const savedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
-          if (savedNFTs.length > 0) {
-            // Get the most recent minted NFT
-            setSpaceBaby(savedNFTs[savedNFTs.length - 1]);
+        // First try to get wallet from session storage
+        let address = sessionStorage.getItem('walletAddress');
+        
+        // Check for phantom wallet connection
+        if (!address && window.solana && window.solana.isPhantom) {
+          try {
+            const response = await window.solana.connect({ onlyIfTrusted: true });
+            if (response.publicKey) {
+              address = response.publicKey.toString();
+              console.log("Connected to Phantom wallet:", address);
+            }
+          } catch (error) {
+            console.error("Phantom wallet auto-connect error:", error);
           }
         }
+        
+        // Check for Ethereum wallet
+        if (!address && window.ethereum) {
+          try {
+            const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+            if (accounts.length > 0) {
+              address = accounts[0];
+              console.log("Connected to Ethereum wallet:", address);
+            }
+          } catch (error) {
+            console.error("Ethereum wallet error:", error);
+          }
+        }
+        
+        // Try to get the address from localStorage as a fallback
+        if (!address) {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          if (currentUser && currentUser.wallet_address) {
+            address = currentUser.wallet_address;
+            console.log("Using wallet address from local storage:", address);
+          }
+        }
+        
+        if (address) {
+          setWalletAddress(address);
+          await loadUserBabies(address);
+        } else {
+          console.log("No wallet address found");
+          setIsLoading(false);
+        }
       } catch (error) {
-        console.error('Error loading Space Baby data:', error);
+        console.error("Error checking wallet:", error);
+        setIsLoading(false);
       }
     };
     
-    loadSpaceBaby();
-    
-    // Simulate loading progress
-    const loadingInterval = setInterval(() => {
-      setLoadingProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(loadingInterval);
-          return 100;
-        }
-        return prev + 5;
-      });
-    }, 300);
-    
-    return () => clearInterval(loadingInterval);
+    checkWalletAndLoadBabies();
   }, []);
+  
+  // Load user's Space Babies from all available sources
+  const loadUserBabies = async (address) => {
+    try {
+      console.log("Loading babies for wallet:", address);
+      let allBabies = [];
+      
+      // 1. Try to fetch babies from database
+      try {
+        // Get all babies associated with this user by wallet_address
+        const { data: dbBabies, error: babiesError } = await supabase
+          .from(TABLES.BABIES)
+          .select('*')
+          .eq('wallet_address', address)
+          .order('created_at', { ascending: false });
+        
+        if (babiesError) {
+          console.error("Error fetching user's babies by wallet address:", babiesError);
+        } else if (dbBabies && dbBabies.length > 0) {
+          console.log("Found babies in database:", dbBabies.length);
+          
+          // Format database babies to match our expected structure
+          const formattedDbBabies = dbBabies.map(baby => ({
+            id: baby.id || String(Math.random()).slice(2),
+            name: baby.name || `Space Baby #${baby.id?.slice(-4) || Math.floor(Math.random() * 1000)}`,
+            image: baby.image_url,
+            attributes: baby.attributes || {},
+            created_at: baby.created_at
+          }));
+          
+          allBabies = [...allBabies, ...formattedDbBabies.filter(baby => baby.image)];
+        }
+      } catch (dbError) {
+        console.error("Database error:", dbError);
+      }
+      
+      // 2. Try to fetch babies from session storage
+      try {
+        // Check for the current Space Baby first
+        const currentBaby = sessionStorage.getItem('currentSpaceBaby');
+        if (currentBaby) {
+          const parsedBaby = JSON.parse(currentBaby);
+          if (parsedBaby && parsedBaby.image) {
+            // Check if this baby is already in our allBabies array
+            const alreadyExists = allBabies.some(
+              baby => baby.id === parsedBaby.id || baby.image === parsedBaby.image
+            );
+            
+            if (!alreadyExists) {
+              allBabies.push({
+                ...parsedBaby,
+                id: parsedBaby.id || String(Math.random()).slice(2)
+              });
+            }
+          }
+        }
+        
+        // Check for all minted NFTs
+        const savedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
+        if (savedNFTs.length > 0) {
+          console.log("Found babies in session storage:", savedNFTs.length);
+          
+          // Filter out any babies that are already in our allBabies array
+          const uniqueSavedBabies = savedNFTs.filter(savedBaby => {
+            return !allBabies.some(baby => 
+              baby.id === savedBaby.id || 
+              (savedBaby.image && baby.image === savedBaby.image)
+            );
+          });
+          
+          allBabies = [...allBabies, ...uniqueSavedBabies];
+        }
+      } catch (sessionError) {
+        console.error("Error checking session storage:", sessionError);
+      }
+      
+      console.log("Total babies found:", allBabies.length);
+      
+      // Set all found babies to state
+      if (allBabies.length > 0) {
+        setSpaceBabies(allBabies);
+        // Set the first baby as the selected one
+        setSelectedBaby(allBabies[0]);
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error loading user babies:", error);
+      setIsLoading(false);
+    }
+  };
+  
+  // Handle connecting a wallet
+  const handleConnectWallet = async () => {
+    try {
+      setIsLoading(true);
+      
+      // Try Phantom wallet first
+      if (window.solana && window.solana.isPhantom) {
+        const wallet = await connectPhantomWallet();
+        if (wallet && wallet.address) {
+          setWalletAddress(wallet.address);
+          await loadUserBabies(wallet.address);
+          return;
+        }
+      }
+      
+      // Try Ethereum wallet as fallback
+      if (window.ethereum) {
+        await window.ethereum.request({ method: 'eth_requestAccounts' });
+        const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+        if (accounts.length > 0) {
+          setWalletAddress(accounts[0]);
+          await loadUserBabies(accounts[0]);
+          return;
+        }
+      }
+      
+      setIsLoading(false);
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      setIsLoading(false);
+    }
+  };
+  
+  // Select a baby from the gallery
+  const handleSelectBaby = (baby) => {
+    setSelectedBaby(baby);
+  };
   
   // Animation when component mounts
   useEffect(() => {
@@ -765,7 +1063,7 @@ const Astroverse = () => {
         '-=0.3'
       );
     }
-  }, [spaceBaby]);
+  }, [selectedBaby]);
   
   const handleVote = (initiativeId, vote) => {
     setVotes(prev => ({
@@ -777,8 +1075,78 @@ const Astroverse = () => {
     console.log(`Voted ${vote} for initiative ${initiativeId}`);
   };
   
+  // Filter babies based on the active gallery view
+  const filteredBabies = () => {
+    if (activeGalleryView === 'all') {
+      return spaceBabies;
+    } else if (activeGalleryView === 'recent') {
+      return [...spaceBabies].sort((a, b) => {
+        return new Date(b.created_at || 0) - new Date(a.created_at || 0);
+      });
+    } else if (activeGalleryView === 'rare') {
+      return [...spaceBabies].filter(baby => {
+        // Implement your own rarity logic here
+        return true;
+      });
+    }
+    return spaceBabies;
+  };
+  
+  // Render the gallery view
+  const renderGallery = () => {
+    return (
+      <GalleryContainer>
+        <SectionTitle>Select a Space Baby</SectionTitle>
+        
+        <div>
+          <GalleryTab 
+            active={activeGalleryView === 'all'} 
+            onClick={() => setActiveGalleryView('all')}
+          >
+            All Space Babies
+          </GalleryTab>
+          <GalleryTab 
+            active={activeGalleryView === 'recent'} 
+            onClick={() => setActiveGalleryView('recent')}
+          >
+            Recently Added
+          </GalleryTab>
+          <GalleryTab 
+            active={activeGalleryView === 'rare'} 
+            onClick={() => setActiveGalleryView('rare')}
+          >
+            Rare Traits
+          </GalleryTab>
+        </div>
+        
+        <BabiesGallery>
+          {filteredBabies().map((baby, index) => (
+            <BabyCard 
+              key={baby.id || index} 
+              onClick={() => handleSelectBaby(baby)}
+              className={selectedBaby && selectedBaby.id === baby.id ? 'selected' : ''}
+            >
+              <BabyImage>
+                <img src={baby.image} alt={baby.name} />
+              </BabyImage>
+              <BabyName>{baby.name}</BabyName>
+              <BabyId>#{baby.id?.substring(0, 6) || index}</BabyId>
+            </BabyCard>
+          ))}
+        </BabiesGallery>
+        
+        {spaceBabies.length > 12 && (
+          <LoadMoreButton>
+            Load More
+          </LoadMoreButton>
+        )}
+      </GalleryContainer>
+    );
+  };
+
   return (
     <Section ref={sectionRef}>
+      <Navbar />
       <StarsContainer>
         {stars.map(star => (
           <Star 
@@ -806,26 +1174,33 @@ const Astroverse = () => {
         <GalaxyLink to="/astroverse" active="true">ASTROVerse</GalaxyLink>
       </GalaxyNav>
       
-      {spaceBaby ? (
+      {isLoading ? (
+        <Message>
+          <h3>Loading your Space Babies...</h3>
+          <LoadingBar progress={`${loadingProgress}%`} />
+        </Message>
+      ) : spaceBabies.length > 0 && selectedBaby ? (
         <CitizenDashboard>
           <CitizenBadge className="dashboard-item">
             <h3>Your Astroverse Citizen</h3>
+            
+            {/* Display NFT container first */}
             <NFTDisplayContainer>
               <NFTOrbitalRing />
               <NFTSecondRing />
               <NFTImage>
-                <img src={spaceBaby.image} alt={spaceBaby.name} />
+                <img src={selectedBaby.image} alt={selectedBaby.name} />
               </NFTImage>
             </NFTDisplayContainer>
             
             <CitizenshipInfo>
               <div className="info-row">
                 <span>Name:</span>
-                <span>{spaceBaby.name}</span>
+                <span>{selectedBaby.name}</span>
               </div>
               <div className="info-row">
                 <span>Citizenship ID:</span>
-                <span>#{spaceBaby.id || Math.floor(Math.random() * 4000) + 1}</span>
+                <span>#{selectedBaby.id?.substring(0, 6) || Math.floor(Math.random() * 4000) + 1}</span>
               </div>
               <div className="info-row">
                 <span>Status:</span>
@@ -833,7 +1208,7 @@ const Astroverse = () => {
               </div>
               <div className="info-row">
                 <span>Joined:</span>
-                <span>{new Date().toLocaleDateString()}</span>
+                <span>{new Date(selectedBaby.created_at || Date.now()).toLocaleDateString()}</span>
               </div>
             </CitizenshipInfo>
             
@@ -844,13 +1219,29 @@ const Astroverse = () => {
               Soul Attributes
             </AttributesTitle>
             <AttributesContainer>
-              {spaceBaby.attributes && spaceBaby.attributes.map((attr, index) => (
-                <AttributeTag key={index}>
-                  <span>{attr.trait_type}</span>
-                  <span>{attr.value}</span>
-                </AttributeTag>
-              ))}
+              {selectedBaby.attributes && Array.isArray(selectedBaby.attributes) ? (
+                // Handle array type attributes
+                selectedBaby.attributes.map((attr, index) => (
+                  <AttributeTag key={index}>
+                    <span>{attr.trait_type}</span>
+                    <span>{attr.value}</span>
+                  </AttributeTag>
+                ))
+              ) : selectedBaby.attributes ? (
+                // Handle object type attributes
+                Object.entries(selectedBaby.attributes).map(([trait, value], index) => (
+                  <AttributeTag key={index}>
+                    <span>{trait}</span>
+                    <span>{value}</span>
+                  </AttributeTag>
+                ))
+              ) : (
+                <p style={{ color: "white", textAlign: "center" }}>No attributes found</p>
+              )}
             </AttributesContainer>
+            
+            {/* Display gallery below citizen info */}
+            {renderGallery()}
           </CitizenBadge>
           
           <div>
@@ -878,6 +1269,7 @@ const Astroverse = () => {
                 </TabButton>
               </TabMenu>
               
+              {/* The rest of the tab content remains the same */}
               {activeTab === 'benefits' && (
                 <>
                   <BenefitCard>
@@ -930,358 +1322,6 @@ const Astroverse = () => {
                   </BenefitCard>
                 </>
               )}
-              
-              {activeTab === 'community' && (
-                <>
-                  <InitiativeGrid>
-                    <InitiativeCard>
-                      <h4>Astroverse Expansion Proposal</h4>
-                      <p>Vote on the next area of expansion for the Astroverse. Options include gaming partnerships, AR experiences, or interactive storytelling.</p>
-                      <LoadingBar progress="68%" />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                        <span style={{ color: '#aeff00' }}>254 votes</span>
-                        <span style={{ color: '#ffffff' }}>3 days left</span>
-                      </div>
-                      <VoteButtons>
-                        <VoteButton 
-                          voted={votes['expansion'] === 'games'} 
-                          onClick={() => handleVote('expansion', 'games')}
-                          disabled={votes['expansion'] && votes['expansion'] !== 'games'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M15.502 1.94a.5.5 0 0 1 0 .706L14.459 3.69l-2-2L13.502.646a.5.5 0 0 1 .707 0l1.293 1.293zm-1.75 2.456-2-2L4.939 9.21a.5.5 0 0 0-.121.196l-.805 2.414a.25.25 0 0 0 .316.316l2.414-.805a.5.5 0 0 0 .196-.12l6.813-6.814z"/>
-                            <path fillRule="evenodd" d="M1 13.5A1.5 1.5 0 0 0 2.5 15h11a1.5 1.5 0 0 0 1.5-1.5v-6a.5.5 0 0 0-1 0v6a.5.5 0 0 1-.5.5h-11a.5.5 0 0 1-.5-.5v-11a.5.5 0 0 1 .5-.5H9a.5.5 0 0 0 0-1H2.5A1.5 1.5 0 0 0 1 2.5v11z"/>
-                          </svg>
-                          Gaming
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['expansion'] === 'ar'} 
-                          onClick={() => handleVote('expansion', 'ar')}
-                          disabled={votes['expansion'] && votes['expansion'] !== 'ar'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3.646 10.646a.5.5 0 0 1-.708 0L8 8.707l-2.938 2.939a.5.5 0 0 1-.707-.708L7.293 8 4.354 5.061a.5.5 0 1 1 .707-.708L8 7.293l2.938-2.939a.5.5 0 0 1 .708.707L8.707 8l2.939 2.938a.5.5 0 0 1 0 .708z"/>
-                          </svg>
-                          AR Tech
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['expansion'] === 'story'} 
-                          onClick={() => handleVote('expansion', 'story')}
-                          disabled={votes['expansion'] && votes['expansion'] !== 'story'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8.93 6.588-2.29.287-.082.38 7.68 3.687l.177-.235c.236-.332.475-.662.808-1.283a13.57 13.57 0 0 0-1.13-.824l-.012-.008a2.12 2.12 0 0 1-.241-.176l-.008-.007c-.149-.129-.348-.226-.554-.226-.631 0-1.477.892-1.929 1.519-.452.627-1.233 1.28-1.729 2.031l-.009.013a.35.35 0 0 0-.009.375c.464-.084 1.607.979 1.869 1.269a2.24 2.24 0 0 0-.082.858c.067.431.339.723.594.826.256.103.587.066.915-.287.323-.353.666-.899.924-1.512.216-.544.395-.898.466-1.223L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
-                          </svg>
-                          Story
-                        </VoteButton>
-                      </VoteButtons>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Charity Selection</h4>
-                      <p>Help select which charitable cause 5% of the next collection's proceeds will benefit.</p>
-                      <LoadingBar progress="42%" />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                        <span style={{ color: '#aeff00' }}>178 votes</span>
-                        <span style={{ color: '#ffffff' }}>5 days left</span>
-                      </div>
-                      <VoteButtons>
-                        <VoteButton 
-                          voted={votes['charity'] === 'environment'} 
-                          onClick={() => handleVote('charity', 'environment')}
-                          disabled={votes['charity'] && votes['charity'] !== 'environment'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 1a7 7 0 1 0 0 14A7 7 0 0 0 8 1zm3 4.3c0 .4-.2.7-.5 1-.4.4-.7.9-.8 1.4-.2.6-.1 1.4.5 2.4.6 1 .3 1.9-.2 2.4-.5.5-1.3.7-2.1.1-.9-.6-1.5-.3-1.9.2-.4.4-.4 1.2 0 2 .2.5-.1 1-.6 1.2-.5.2-1.1 0-1.3-.5-.3-1-.8-1.4-1.3-1.5-.7-.1-1.3.3-1.6.9-.2.5-.7.7-1.1.5-.5-.2-.7-.8-.5-1.3.5-1 .2-1.9-.5-2.4s-.7-1.4-.2-2.4c.6-1 .6-1.7.4-2.2-.2-.5-.6-1-1.2-1.1-.6-.1-.8-.8-.7-1.3.2-.5.6-.8 1.2-.6.9.2 1.7-.1 2.1-.7.4-.6.4-1.5-.1-2.3-.3-.5-.3-1.1.3-1.3.5-.2 1.1 0 1.3.5.7 1.3 2 1.3 2.8.1.3-.5.9-.7 1.3-.4.5.3.6.9.3 1.4-.8 1.3-.6 2.3.5 2.8.5.2.9.7.6 1.3z"/>
-                          </svg>
-                          Environment
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['charity'] === 'education'} 
-                          onClick={() => handleVote('charity', 'education')}
-                          disabled={votes['charity'] && votes['charity'] !== 'education'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 0a.5.5 0 0 1 .473.337L9.046 2H14a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h4.954L7.527.337A.5.5 0 0 1 8 0zM1 6v-.5a.5.5 0 0 1 1 0V6h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0V9h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1zm0 3v-.5a.5.5 0 0 1 1 0v.5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1H1z"/>
-                          </svg>
-                          Education
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['charity'] === 'health'} 
-                          onClick={() => handleVote('charity', 'health')}
-                          disabled={votes['charity'] && votes['charity'] !== 'health'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 4.754a3.246 3.246 0 1 0 0 6.492 3.246 3.246 0 0 0 0-6.492zM5.754 8a2.246 2.246 0 1 1 4.492 0 2.246 2.246 0 0 1-4.492 0z"/>
-                            <path d="M9.796 1.343c-.527-1.79-3.065-1.79-3.592 0l-.094.319a.873.873 0 0 1-1.255.52l-.292-.16c-1.64-.892-3.433.902-2.54 2.541l.159.292a.873.873 0 0 1-.52 1.255l-.319.094c-1.79.527-1.79 3.065 0 3.592l.319.094a.873.873 0 0 1 .52 1.255l-.16.292c-.892 1.64.901 3.434 2.541 2.54l.292-.159a.873.873 0 0 1 1.255.52l.094.319c.527 1.79 3.065 1.79 3.592 0l.094-.319a.873.873 0 0 1 1.255-.52l.292.16c1.64.893 3.434-.902 2.54-2.541l-.159-.292a.873.873 0 0 1 .52-1.255l.319-.094c1.79-.527 1.79-3.065 0-3.592l-.319-.094a.873.873 0 0 1-.52-1.255l.16-.292c.893-1.64-.902-3.433-2.541-2.54l-.292.159a.873.873 0 0 1-1.255-.52l-.094-.319zm-2.633.283c.246-.835 1.428-.835 1.674 0l.094.319a1.873 1.873 0 0 0 2.693 1.115l.291-.16c.764-.415 1.6.42 1.184 1.185l-.159.292a1.873 1.873 0 0 0 1.116 2.692l.318.094c.835.246.835 1.428 0 1.674l-.319.094a1.873 1.873 0 0 0-1.115 2.693l.16.291c.415.764-.42 1.6-1.185 1.184l-.291-.159a1.873 1.873 0 0 0-2.693 1.116l-.094.318c-.246.835-1.428.835-1.674 0l-.094-.319a1.873 1.873 0 0 0-2.692-1.115l-.292.16c-.764.415-1.6-.42-1.184-1.185l.159-.291A1.873 1.873 0 0 0 1.945 8.93l-.319-.094c-.835-.246-.835-1.428 0-1.674l.319-.094A1.873 1.873 0 0 0 3.06 4.377l-.16-.292c-.415-.764.42-1.6 1.185-1.184l.292.159a1.873 1.873 0 0 0 2.692-1.115l.094-.319z"/>
-                          </svg>
-                          Healthcare
-                        </VoteButton>
-                      </VoteButtons>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Next Collection Theme</h4>
-                      <p>Share your input on the creative direction for the next Space Babiez collection.</p>
-                      <LoadingBar progress="87%" />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                        <span style={{ color: '#aeff00' }}>412 votes</span>
-                        <span style={{ color: '#ffffff' }}>1 day left</span>
-                      </div>
-                      <VoteButtons>
-                        <VoteButton 
-                          voted={votes['theme'] === 'cosmic'} 
-                          onClick={() => handleVote('theme', 'cosmic')}
-                          disabled={votes['theme'] && votes['theme'] !== 'cosmic'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 0a8 8 0 1 0 0 16A8 8 0 0 0 8 0ZM5.78 8.75a9.64 9.64 0 0 0 1.363 4.177c.255.426.542.832.857 1.215.245-.296.551-.705.857-1.215A9.64 9.64 0 0 0 10.22 8.75Zm4.44-1.5a9.64 9.64 0 0 0-1.363-4.177c-.307-.51-.612-.919-.857-1.215a9.927 9.927 0 0 0-.857 1.215A9.64 9.64 0 0 0 5.78 7.25Zm-5.944 1.5H1.543a6.507 6.507 0 0 0 4.666 5.5c-.123-.181-.24-.365-.352-.552-.715-1.192-1.437-2.874-1.581-4.948Zm-2.733-1.5h2.733c.144-2.074.866-3.756 1.58-4.948.12-.197.237-.381.353-.552a6.507 6.507 0 0 0-4.666 5.5Zm10.181 1.5c-.144 2.074-.866 3.756-1.58 4.948-.12.197-.237.381-.353.552a6.507 6.507 0 0 0 4.666-5.5Zm2.733-1.5a6.507 6.507 0 0 0-4.666-5.5c.123.181.24.365.353.552.714 1.192 1.437 2.874 1.58 4.948Z"/>
-                          </svg>
-                          Cosmic
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['theme'] === 'elemental'} 
-                          onClick={() => handleVote('theme', 'elemental')}
-                          disabled={votes['theme'] && votes['theme'] !== 'elemental'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M2 6a6 6 0 1 1 10.174 4.31c-.203.196-.359.4-.453.619l-.762 1.769A.5.5 0 0 1 10.5 13h-5a.5.5 0 0 1-.46-.302l-.761-1.77a1.964 1.964 0 0 0-.453-.618A5.984 5.984 0 0 1 2 6zm10.356 4.695C14.066 8.159 16 8.4 16 8.4c0-.059-.1-.3-.978-.932C13.144 6.1 9.357 6 8 6c-1.357 0-5.144.1-7.022 1.468C.022 8.1 0 8.41 0 8.4c0 0 1.934-.24 3.644 2.295C4.679 11.768 5.501 13 8 13s3.321-1.232 4.356-2.305z"/>
-                          </svg>
-                          Elemental
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['theme'] === 'cyber'} 
-                          onClick={() => handleVote('theme', 'cyber')}
-                          disabled={votes['theme'] && votes['theme'] !== 'cyber'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M6 12.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5ZM3 8.062C3 6.76 4.235 5.765 5.53 5.886a26.58 26.58 0 0 0 4.94 0C11.765 5.765 13 6.76 13 8.062v1.157a.933.933 0 0 1-.765.935c-.845.147-2.34.346-4.235.346-1.895 0-3.39-.2-4.235-.346A.933.933 0 0 1 3 9.219V8.062Zm4.542-.827a.25.25 0 0 0-.217.068l-.92.9a24.767 24.767 0 0 1-1.871-.183.25.25 0 0 0-.068.495c.55.076 1.232.149 2.02.193a.25.25 0 0 0 .189-.071l.754-.736.847 1.71a.25.25 0 0 0 .404.062l.932-.97a25.286 25.286 0 0 0 1.922-.188.25.25 0 0 0-.068-.495c-.538.074-1.207.145-1.98.189a.25.25 0 0 0-.166.076l-.754.785-.842-1.7a.25.25 0 0 0-.182-.135Z"/>
-                            <path d="M8.5 1.866a1 1 0 1 0-1 0V3h-2A4.5 4.5 0 0 0 1 7.5V8a1 1 0 0 0-1 1v2a1 1 0 0 0 1 1v1a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-1a1 1 0 0 0 1-1V9a1 1 0 0 0-1-1v-.5A4.5 4.5 0 0 0 10.5 3h-2V1.866ZM14 7.5V13a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V7.5A3.5 3.5 0 0 1 5.5 4h5A3.5 3.5 0 0 1 14 7.5Z"/>
-                          </svg>
-                          Cyber
-                        </VoteButton>
-                      </VoteButtons>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Community Events</h4>
-                      <p>Select which type of community event you'd prefer to attend in the next quarter.</p>
-                      <LoadingBar progress="54%" />
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.9rem' }}>
-                        <span style={{ color: '#aeff00' }}>198 votes</span>
-                        <span style={{ color: '#ffffff' }}>4 days left</span>
-                      </div>
-                      <VoteButtons>
-                        <VoteButton 
-                          voted={votes['event'] === 'virtual'} 
-                          onClick={() => handleVote('event', 'virtual')}
-                          disabled={votes['event'] && votes['event'] !== 'virtual'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M0 3a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3zm9.5 5.5h-3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1zm-6.354-.354a.5.5 0 1 0 .708.708l2-2a.5.5 0 0 0 0-.708l-2-2a.5.5 0 1 0-.708.708L4.793 6.5 3.146 8.146z"/>
-                          </svg>
-                          Virtual
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['event'] === 'in-person'} 
-                          onClick={() => handleVote('event', 'in-person')}
-                          disabled={votes['event'] && votes['event'] !== 'in-person'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M14 9.5a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm-6 5.7c0 .8.8.8.8.8h6.4s.8 0 .8-.8-.8-3.2-4-3.2-4 2.4-4 3.2Z"/>
-                            <path d="M2 2a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h5.243c.122-.326.295-.668.526-1H2a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7.81c.353.23.656.496.91.783.059-.187.09-.386.09-.593V4a2 2 0 0 0-2-2H2Z"/>
-                          </svg>
-                          In-Person
-                        </VoteButton>
-                        <VoteButton 
-                          voted={votes['event'] === 'hybrid'} 
-                          onClick={() => handleVote('event', 'hybrid')}
-                          disabled={votes['event'] && votes['event'] !== 'hybrid'}
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                            <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                            <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
-                          </svg>
-                          Hybrid
-                        </VoteButton>
-                      </VoteButtons>
-                    </InitiativeCard>
-                  </InitiativeGrid>
-                  
-                  <Message>
-                    <h3>Community Governance</h3>
-                    <p>As a Space Baby guardian, your voice matters in the Astroverse. Participation in community votes grants you AstroPoints which can be redeemed for exclusive perks and NFTs.</p>
-                    <ActionButton $secondary style={{ marginTop: '1rem' }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                        <path d="m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z"/>
-                      </svg>
-                      View Governance Guidelines
-                    </ActionButton>
-                  </Message>
-                </>
-              )}
-              
-              {activeTab === 'roadmap' && (
-                <>
-                  <p style={{ color: '#ffffff', marginBottom: '2rem' }}>
-                    Track the Astroverse expansion and see what's coming next for Space Babiez citizens. 
-                    Phases are unlocked as community milestones are reached.
-                  </p>
-                  
-                  <RoadmapSection>
-                    <RoadmapItem unlocked>
-                      <h4>Phase 1: Astroverse Citizenship</h4>
-                      <p>Establishment of the Astroverse community hub, citizen benefits program, and governance platform.</p>
-                      <div style={{ color: '#aeff00', fontSize: '0.9rem', marginTop: '0.5rem' }}>✓ Completed</div>
-                    </RoadmapItem>
-                    
-                    <RoadmapItem current>
-                      <h4>Phase 2: Expansion of Benefits</h4>
-                      <p>Introduction of passive income opportunities, cross-platform integration, and advanced community governance tools.</p>
-                      <div style={{ color: '#6c00ff', fontSize: '0.9rem', marginTop: '0.5rem' }}>◉ In Progress</div>
-                      <LoadingBar progress="65%" />
-                    </RoadmapItem>
-                    
-                    <RoadmapItem>
-                      <h4>Phase 3: Metaverse Integration</h4>
-                      <p>Launch of Space Babiez virtual environments, interactive 3D avatars, and metaverse citizenship privileges.</p>
-                    </RoadmapItem>
-                    
-                    <RoadmapItem>
-                      <h4>Phase 4: Cross-Chain Expansion</h4>
-                      <p>Space Babiez will expand to multiple blockchains, creating interoperable assets and unified citizenship across platforms.</p>
-                    </RoadmapItem>
-                    
-                    <RoadmapItem>
-                      <h4>Phase 5: Real-world Utility</h4>
-                      <p>Implementation of real-world benefits and utilities for Space Baby guardians, including exclusive merchandise, event access, and brand partnerships.</p>
-                    </RoadmapItem>
-                  </RoadmapSection>
-                  
-                  <Message>
-                    <h3>Community-Driven Development</h3>
-                    <p>The roadmap evolves based on community input. New phases and initiatives are added as the Astroverse grows. Stay engaged to influence our direction!</p>
-                    <ActionButton $secondary style={{ marginTop: '1rem' }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M14 1a1 1 0 0 1 1 1v12a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h12zM2 0a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2H2z"/>
-                        <path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4z"/>
-                      </svg>
-                      Suggest New Features
-                    </ActionButton>
-                  </Message>
-                </>
-              )}
-              
-              {activeTab === 'income' && (
-                <>
-                  <p style={{ color: '#ffffff', marginBottom: '2rem' }}>
-                    Your Space Baby can generate passive income through multiple streams in the Astroverse. 
-                    Explore the opportunities available to guardian citizens.
-                  </p>
-                  
-                  <InitiativeGrid>
-                    <InitiativeCard>
-                      <h4>NFT Staking</h4>
-                      <p>Stake your Space Baby to earn AstroTokens that can be exchanged for crypto or used within the ecosystem.</p>
-                      <div style={{ background: 'rgba(108, 0, 255, 0.2)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                          <span style={{ color: '#ffffff' }}>Daily Rate:</span>
-                          <span style={{ color: '#aeff00' }}>5-15 AT</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#ffffff' }}>Status:</span>
-                          <span style={{ color: '#ff5500' }}>Coming Soon</span>
-                        </div>
-                      </div>
-                      <ActionButton $secondary style={{ marginTop: '1rem', width: '100%' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M8 0a1 1 0 0 1 1 1v5.268l4.562-2.634a1 1 0 1 1 1 1.732L10 8l4.562 2.634a1 1 0 1 1-1 1.732L9 9.732V15a1 1 0 1 1-2 0V9.732l-4.562 2.634a1 1 0 1 1-1-1.732L6 8 1.438 5.366a1 1 0 0 1 1-1.732L7 6.268V1a1 1 0 0 1 1-1z"/>
-                        </svg>
-                        Join Waitlist
-                      </ActionButton>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Commercial Rights</h4>
-                      <p>Use your Space Baby's image for commercial projects and merchandise, subject to community guidelines.</p>
-                      <div style={{ background: 'rgba(108, 0, 255, 0.2)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                          <span style={{ color: '#ffffff' }}>License Type:</span>
-                          <span style={{ color: '#aeff00' }}>Commercial Use</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#ffffff' }}>Status:</span>
-                          <span style={{ color: '#aeff00' }}>Active</span>
-                        </div>
-                      </div>
-                      <ActionButton style={{ marginTop: '1rem', width: '100%' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M9.293 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V4.707A1 1 0 0 0 13.707 4L10 .293A1 1 0 0 0 9.293 0zM9.5 3.5v-2l3 3h-2a1 1 0 0 1-1-1zm1.354 4.354-3 3a.5.5 0 0 1-.708 0l-1.5-1.5a.5.5 0 1 1 .708-.708L7.5 9.793l2.646-2.647a.5.5 0 0 1 .708.708z"/>
-                        </svg>
-                        View License Terms
-                      </ActionButton>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Revenue Sharing</h4>
-                      <p>Earn a share of future collection revenues and ecosystem transactions as an early citizen.</p>
-                      <div style={{ background: 'rgba(108, 0, 255, 0.2)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                          <span style={{ color: '#ffffff' }}>Share Rate:</span>
-                          <span style={{ color: '#aeff00' }}>0.5% - 2%</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#ffffff' }}>Status:</span>
-                          <span style={{ color: '#ff5500' }}>Coming Q3</span>
-                        </div>
-                      </div>
-                      <ActionButton $secondary style={{ marginTop: '1rem', width: '100%' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M5.5 9.511c.076.954.83 1.697 2.182 1.785V12h.6v-.709c1.4-.098 2.218-.846 2.218-1.932 0-.987-.626-1.496-1.745-1.76l-.473-.112V5.57c.6.068.982.396 1.074.85h1.052c-.076-.919-.864-1.638-2.126-1.716V4h-.6v.719c-1.195.117-2.01.836-2.01 1.853 0 .9.606 1.472 1.613 1.707l.397.098v2.034c-.615-.093-1.022-.43-1.114-.9H5.5zm2.177-2.166c-.59-.137-.91-.416-.91-.836 0-.47.345-.822.915-.925v1.76h-.005zm.692 1.193c.717.166 1.048.435 1.048.91 0 .542-.412.914-1.135.982V8.518l.087.02z"/>
-                          <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                          <path d="M8 13.5a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11zm0 .5A6 6 0 1 0 8 2a6 6 0 0 0 0 12z"/>
-                        </svg>
-                        Program Details
-                      </ActionButton>
-                    </InitiativeCard>
-                    
-                    <InitiativeCard>
-                      <h4>Play-to-Earn</h4>
-                      <p>Use your Space Baby as a character in upcoming SBU games and experiences to earn rewards.</p>
-                      <div style={{ background: 'rgba(108, 0, 255, 0.2)', padding: '1rem', borderRadius: '10px', marginTop: '1rem' }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                          <span style={{ color: '#ffffff' }}>Game Status:</span>
-                          <span style={{ color: '#aeff00' }}>In Development</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: '#ffffff' }}>Launch:</span>
-                          <span style={{ color: '#ff5500' }}>Q4 2023</span>
-                        </div>
-                      </div>
-                      <ActionButton $secondary style={{ marginTop: '1rem', width: '100%' }}>
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                          <path d="M11.5 6.027a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zm-1.5 1.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zm2.5-.5a.5.5 0 1 1-1 0 .5.5 0 0 1 1 0zm-1.5 1.5a.5.5 0 1 0 0-1 .5.5 0 0 0 0 1zm-6.5-3h1v1h1v1h-1v1h-1v-1h-1v-1h1v-1z"/>
-                          <path d="M3.051 3.26a.5.5 0 0 1 .354-.613l1.932-.518a.5.5 0 0 1 .62.39c.655-.079 1.35-.117 2.043-.117.72 0 1.443.041 2.12.126a.5.5 0 0 1 .622-.399l1.932.518a.5.5 0 0 1 .306.729c.14.09.266.19.373.297.408.408.78 1.05 1.095 1.772.32.733.599 1.591.805 2.466.206.875.34 1.78.364 2.606.024.816-.059 1.602-.328 2.21a1.42 1.42 0 0 1-1.445.83c-.636-.067-1.115-.394-1.513-.773-.245-.232-.496-.526-.739-.808-.126-.148-.25-.292-.368-.423-.728-.804-1.597-1.527-3.224-1.527-1.627 0-2.496.723-3.224 1.527-.119.131-.242.275-.368.423-.243.282-.494.575-.739.808-.398.38-.877.706-1.513.773a1.42 1.42 0 0 1-1.445-.83c-.27-.608-.352-1.395-.329-2.21.024-.826.16-1.73.365-2.606.206-.875.486-1.733.805-2.466.315-.722.687-1.364 1.094-1.772a2.34 2.34 0 0 1 .433-.335.504.504 0 0 1-.028-.079zm2.036.412c-.877.185-1.469.443-1.733.708-.276.276-.587.783-.885 1.465a13.748 13.748 0 0 0-.748 2.295 12.351 12.351 0 0 0-.339 2.406c-.022.755.062 1.368.243 1.776a.42.42 0 0 0 .426.24c.327-.034.61-.199.929-.502.212-.202.4-.423.615-.674.133-.156.276-.323.44-.504C4.861 9.969 5.978 9.027 8 9.027s3.139.942 3.965 1.855c.164.181.307.348.44.504.214.251.403.472.615.674.318.303.601.468.929.503a.42.42 0 0 0 .426-.241c.18-.408.265-1.02.243-1.776a12.354 12.354 0 0 0-.339-2.406 13.753 13.753 0 0 0-.748-2.295c-.298-.682-.61-1.19-.885-1.465-.264-.265-.856-.523-1.733-.708-.85-.179-1.877-.27-2.913-.27-1.036 0-2.063.091-2.913.27z"/>
-                        </svg>
-                        Game Preview
-                      </ActionButton>
-                    </InitiativeCard>
-                  </InitiativeGrid>
-                  
-                  <Message>
-                    <h3>Passive Income Disclaimer</h3>
-                    <p>All passive income opportunities are subject to market conditions and ecosystem growth. Returns are not guaranteed. Always conduct your own research and understand the risks involved.</p>
-                    <ActionButton $secondary style={{ marginTop: '1rem' }}>
-                      <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                        <path d="M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z"/>
-                        <path d="M5.255 5.786a.237.237 0 0 0 .241.247h.825c.138 0 .248-.113.266-.25.09-.656.54-1.134 1.342-1.134.686 0 1.314.343 1.314 1.168 0 .635-.374.927-.965 1.371-.673.489-1.206 1.06-1.168 1.987l.003.217a.25.25 0 0 0 .25.246h.811a.25.25 0 0 0 .25-.25v-.105c0-.718.273-.927 1.01-1.486.609-.463 1.244-.977 1.244-2.056 0-1.511-1.276-2.241-2.673-2.241-1.267 0-2.655.59-2.75 2.286zm1.557 5.763c0 .533.425.927 1.01.927.609 0 1.028-.394 1.028-.927 0-.552-.42-.94-1.029-.94-.584 0-1.009.388-1.009.94z"/>
-                      </svg>
-                      Income FAQs
-                    </ActionButton>
-                  </Message>
-                </>
-              )}
             </ContentSection>
             
             <NavOptions className="dashboard-item" style={{ animationDelay: '0.4s' }}>
@@ -1293,23 +1333,34 @@ const Astroverse = () => {
                 Mint Another Space Baby
               </NavButton>
               
-              <NavButton to="/collection">
+              <NavButton to="/profile">
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: '0.5rem' }}>
-                  <path fillRule="evenodd" d="M0 1.5A.5.5 0 0 1 .5 1H2a.5.5 0 0 1 .485.379L2.89 3H14.5a.5.5 0 0 1 .491.592l-1.5 8A.5.5 0 0 1 13 12H4a.5.5 0 0 1-.491-.408L2 3.5H1.5a.5.5 0 0 1-.5-.5zM3.678 8.116 4.169 11H12.5l1.5-8H3.678 8.5a.5.5 0 0 0 0 1h2a.5.5 0 0 0 0-1Z"/>
+                  <path fillRule="evenodd" d="M6 1a.5.5 0 0 1 .5.5V3H9a.5.5 0 0 1 0 1H6.5v1.5a.5.5 0 0 1-1 0V4H3a.5.5 0 0 1 0-1h2.5V1.5A.5.5 0 0 1 6 1zm3 8a.5.5 0 0 1 .5.5v4a.5.5 0 0 1-1 0V10h-1.5a.5.5 0 0 1 0-1H9V7.5a.5.5 0 0 1 1 0V9h1.5a.5.5 0 0 1 0 1H10v3.5a.5.5 0 0 1-.5.5H4a.5.5 0 0 1-.5-.5V10a.5.5 0 0 1 .5-.5h5z"/>
                 </svg>
-                View My Collection
+                View Full Profile
               </NavButton>
             </NavOptions>
           </div>
         </CitizenDashboard>
-      ) : (
+      ) : walletAddress ? (
         <Message>
-          <h3>No Space Baby Found</h3>
-          <p>You don't appear to have a Space Baby NFT yet. Citizenship in the Astroverse is granted to Space Baby guardians.</p>
+          <h3>No Space Babies Found</h3>
+          <p>You don't appear to have any Space Baby NFTs yet. Citizenship in the Astroverse is granted to Space Baby guardians.</p>
           <NavOptions style={{ marginTop: '1.5rem' }}>
             <NavButton to="/mint" $primary>Mint Your Space Baby</NavButton>
           </NavOptions>
         </Message>
+      ) : (
+        <ConnectPrompt>
+          <h3>Connect Your Wallet</h3>
+          <p>Connect your wallet to access your Space Babies and Astroverse citizenship benefits.</p>
+          <ActionButton onClick={handleConnectWallet}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16" style={{ marginRight: "0.5rem" }}>
+              <path d="M0 3a2 2 0 0 1 2-2h13.5a.5.5 0 0 1 0 1H15v2a1 1 0 0 1 1 1v8.5a1.5 1.5 0 0 1-1.5 1.5h-12A2.5 2.5 0 0 1 0 12.5V3zm1 1.732V12.5A1.5 1.5 0 0 0 2.5 14h12a.5.5 0 0 0 .5-.5V5H2a1.99 1.99 0 0 1-1-.268zM1 3a1 1 0 0 0 1 1h12V2H2a1 1 0 0 0-1 1z"/>
+            </svg>
+            Connect Wallet
+          </ActionButton>
+        </ConnectPrompt>
       )}
     </Section>
   );

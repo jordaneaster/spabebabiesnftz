@@ -9,7 +9,7 @@ import UserProfile from './pages/UserProfile';
 import Gallery from './pages/Gallery';
 import SpaceBabiezManager from './components/SpaceBabiezManager';
 import ContractInteraction from './components/ContractInteraction';
-import { UserAuthProvider } from './context/UserAuthContext';
+import { UserAuthContextProvider } from './context/UserAuthContext';
 import { ThemeProvider } from 'styled-components';
 import GlobalStyles from './styles/GlobalStyles';
 import { dark } from './styles/Themes';
@@ -27,7 +27,7 @@ function App() {
   return (
     <ThemeProvider theme={dark}>
       <GlobalStyles />
-      <UserAuthProvider>
+      <UserAuthContextProvider>
         <Router>
           <ScrollToTop />
           <Layout>
@@ -43,7 +43,7 @@ function App() {
             </Routes>
           </Layout>
         </Router>
-      </UserAuthProvider>
+      </UserAuthContextProvider>
     </ThemeProvider>
   );
 }

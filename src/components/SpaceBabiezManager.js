@@ -5,6 +5,12 @@ import { useUserAuth } from '../context/UserAuthContext';
 import ContractInteraction from './ContractInteraction';
 import { useNavigate } from 'react-router-dom';
 import { generateSpaceBaby, saveSpaceBaby, getUserSpaceBabies } from '../utils/spaceBabyGenerator';
+import { 
+  isWalletConnected, 
+  getWalletAddress, 
+  connectPhantomWallet,
+  autoConnectPhantomWallet
+} from '../utils/walletStateManager';
 
 // Animations
 const float = keyframes`
@@ -305,29 +311,134 @@ const NoWalletMessage = styled.div`
 `;
 
 function SpaceBabiezManager() {
-  const { user, walletAddress, walletConnected, connectWallet } = useUserAuth();
+  const { user, walletAddress: contextWalletAddress, walletConnected: contextWalletConnected, connectWallet } = useUserAuth();
   const [activeTab, setActiveTab] = useState('collection');
   const [myBabies, setMyBabies] = useState([]);
   const [astroMilkBalance, setAstroMilkBalance] = useState('0');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [selectedBaby, setSelectedBaby] = useState(null);
+  const [autoConnectAttempted, setAutoConnectAttempted] = useState(false);
+  const [localWalletConnected, setLocalWalletConnected] = useState(false);
+  const [localWalletAddress, setLocalWalletAddress] = useState('');
   
-  // For breeding
+  // For breeding - these declarations were missing
   const [parent1Id, setParent1Id] = useState('');
   const [parent2Id, setParent2Id] = useState('');
   
-  // For marketplace
+  // For marketplace - these declarations were missing
   const [listingPrice, setListingPrice] = useState('');
   const [selectedBabyId, setSelectedBabyId] = useState('');
   
-  const navigate = useNavigate();
+  // Check if wallet is truly connected using all available sources
+  const isWalletReady = 
+    (contextWalletConnected && contextWalletAddress) || // Check context first
+    (localWalletConnected && localWalletAddress) ||    // Then check local state
+    isWalletConnected();                               // Finally check central state
+  
+  // Get the most reliable wallet address from all sources
+  const effectiveWalletAddress = 
+    contextWalletAddress || 
+    localWalletAddress || 
+    getWalletAddress() || 
+    '';
+  
+  // Auto-connect wallet if not already connected
+  useEffect(() => {
+    const attemptAutoConnect = async () => {
+      // Skip if already attempted
+      if (autoConnectAttempted) return;
+      
+      setAutoConnectAttempted(true);
+      
+      // Skip if wallet is already connected
+      if (isWalletReady) return;
+      
+      try {
+        // Check central state first
+        if (isWalletConnected()) {
+          const address = getWalletAddress();
+          setLocalWalletConnected(true);
+          setLocalWalletAddress(address);
+          
+          // Also update context if available
+          if (typeof connectWallet === 'function') {
+            await connectWallet('phantom', address);
+          }
+          return;
+        }
+        
+        // Try auto-connect
+        const result = await autoConnectPhantomWallet();
+        if (result && result.address) {
+          setLocalWalletConnected(true);
+          setLocalWalletAddress(result.address);
+          
+          // Also update context if available
+          if (typeof connectWallet === 'function') {
+            await connectWallet('phantom', result.address);
+          }
+        }
+      } catch (error) {
+        console.error("Error in auto-connect:", error);
+      }
+    };
+    
+    attemptAutoConnect();
+    
+    // Listen for wallet connection/disconnection events
+    const handleWalletConnected = (event) => {
+      setLocalWalletConnected(true);
+      setLocalWalletAddress(event.detail.address);
+    };
+    
+    const handleWalletDisconnected = () => {
+      setLocalWalletConnected(false);
+      setLocalWalletAddress('');
+    };
+    
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+    
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
+  }, [isWalletReady, connectWallet, autoConnectAttempted]);
   
   // Load user's babies and balance when wallet is connected
   useEffect(() => {
-    if (walletConnected && walletAddress) {
+    // Only attempt to load data if we have a connected wallet with an address
+    if (isWalletReady && effectiveWalletAddress) {
+      console.log("Wallet is ready, loading data with address:", effectiveWalletAddress);
       loadUserData();
+    } else {
+      // If not ready yet, set loading to false to show connect wallet UI
+      console.log("Wallet not ready yet:", { contextWalletConnected, contextWalletAddress, localWalletConnected, localWalletAddress });
+      setLoading(false);
     }
-  }, [walletConnected, walletAddress]);
+  }, [contextWalletConnected, contextWalletAddress, localWalletConnected, localWalletAddress, user]);
+  
+  // Handle explicit wallet connection using our centralized method
+  const handleConnectWallet = async () => {
+    setLoading(true);
+    
+    try {
+      const result = await connectPhantomWallet();
+      if (result && result.address) {
+        setLocalWalletConnected(true);
+        setLocalWalletAddress(result.address);
+        
+        // Also update context if available
+        if (typeof connectWallet === 'function') {
+          await connectWallet('phantom', result.address);
+        }
+      }
+    } catch (error) {
+      console.error("Error connecting wallet:", error);
+      alert(`Failed to connect wallet: ${error.message || "Unknown error"}`);
+      setLoading(false);
+    }
+  };
   
   // Load user's babies and balance
   const loadUserData = async () => {
@@ -335,7 +446,22 @@ function SpaceBabiezManager() {
       setLoading(true);
       
       // Fetch Space Babies associated with the wallet address
-      const userBabies = await getUserSpaceBabies(walletAddress);
+      // Make sure we have a valid identifier (user ID or wallet address)
+      const identifier = user?.id || effectiveWalletAddress;
+      
+      console.log("Loading user data with identifier:", identifier);
+      
+      if (!identifier) {
+        console.warn('No user ID or wallet address available');
+        setMyBabies([]);
+        setLoading(false);
+        return;
+      }
+      
+      // Add a little delay to ensure wallet connection is fully established
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const userBabies = await getUserSpaceBabies(identifier);
       
       if (userBabies && userBabies.length > 0) {
         setMyBabies(userBabies);
@@ -347,6 +473,7 @@ function SpaceBabiezManager() {
       setAstroMilkBalance('1000');
     } catch (error) {
       console.error('Error loading user data:', error);
+      setMyBabies([]); // Set empty array on error
     } finally {
       setLoading(false);
     }
@@ -369,7 +496,7 @@ function SpaceBabiezManager() {
       
       if (newBaby) {
         // Save the Space Baby to the database
-        await saveSpaceBaby(user?.id || walletAddress, newBaby);
+        await saveSpaceBaby(user?.id || effectiveWalletAddress, newBaby);
         
         // Refresh the user's collection
         await loadUserData();
@@ -459,7 +586,7 @@ function SpaceBabiezManager() {
       
       if (newBaby) {
         // Save the Space Baby to the database
-        await saveSpaceBaby(user?.id || walletAddress, newBaby);
+        await saveSpaceBaby(user?.id || effectiveWalletAddress, newBaby);
         
         // Refresh the user's collection
         await loadUserData();
@@ -734,7 +861,8 @@ function SpaceBabiezManager() {
     <ContractInteraction />
   );
   
-  if (!walletConnected) {
+  // Modify the wallet not connected view to use our improved connect function
+  if (!isWalletReady) {
     return (
       <ManagerContainer>
         <Header>
@@ -745,7 +873,8 @@ function SpaceBabiezManager() {
         <NoWalletMessage>
           <h3>Wallet Not Connected</h3>
           <p>To access your Space Babiez collection and interact with the contracts, please connect your wallet first.</p>
-          <WalletButton onClick={connectWallet}>
+          <p>Status: {contextWalletConnected || localWalletConnected ? "Connected but waiting for address" : "Not connected"}</p>
+          <WalletButton onClick={handleConnectWallet}>
             Connect Wallet
           </WalletButton>
         </NoWalletMessage>
@@ -759,9 +888,9 @@ function SpaceBabiezManager() {
         <h1>Space Babiez Manager</h1>
         <p>Manage your Space Babiez collection, mint new NFTs, breed, stake, and more</p>
         
-        {walletConnected && (
+        {isWalletReady && effectiveWalletAddress && (
           <div style={{ marginTop: '1rem' }}>
-            <p>Connected Wallet: {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}</p>
+            <p>Connected Wallet: {effectiveWalletAddress.substring(0, 6)}...{effectiveWalletAddress.substring(effectiveWalletAddress.length - 4)}</p>
             <p>ASTROMILK Balance: {astroMilkBalance}</p>
           </div>
         )}

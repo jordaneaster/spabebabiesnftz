@@ -13,6 +13,13 @@ import soulGeneratorImg from '../assets/soul-generator.png';
 // Import the new Space Baby service
 import SpaceBabyService from '../services/SpaceBabyService';
 import supabase from '../utils/supabaseConfig';
+// Import the wallet state manager utilities
+import { 
+  isWalletConnected, 
+  getWalletAddress, 
+  connectPhantomWallet,
+  disconnectPhantomWallet 
+} from '../utils/walletStateManager';
 
 // Update background image to a valid URL or import directly from assets
 import etherlandBg from '../assets/BGR5.png'; 
@@ -738,6 +745,79 @@ const Etherland = () => {
     ensureAuthentication();
   }, []);
 
+  // Update the component's useEffect to check wallet state on load
+  useEffect(() => {
+    const checkWalletState = async () => {
+      try {
+        // Check if wallet is already connected via our state manager
+        if (isWalletConnected()) {
+          const storedAddress = getWalletAddress();
+          setWalletConnected(true);
+          setWalletAddress(storedAddress);
+          
+          // Check balance
+          try {
+            const balance = await getSolanaBalance(storedAddress);
+            setSufficientFunds(balance >= NFT_PRICE_SOL);
+            
+            if (balance < NFT_PRICE_SOL) {
+              setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
+            } else {
+              setMintingError(''); // Clear any previous errors
+            }
+          } catch (error) {
+            console.error("Error checking balance:", error);
+            // Assume sufficient funds if we can't check
+            setSufficientFunds(true);
+          }
+          
+          // Check if wallet is still connected in Phantom
+          if (window.solana && window.solana.isPhantom) {
+            try {
+              // Just check if it's connected, don't try to reconnect
+              if (window.solana.isConnected) {
+                console.log("Phantom wallet is still connected");
+              } else {
+                console.log("Phantom says wallet is disconnected, but we have stored connection");
+                // If the wallet is no longer connected in Phantom but we have a stored connection,
+                // we'll keep our state and let the user reconnect if needed
+              }
+            } catch (error) {
+              console.error("Error checking Phantom connection:", error);
+            }
+          }
+        } else {
+          // If wallet state says not connected, ensure our component state reflects that
+          setWalletConnected(false);
+          setWalletAddress('');
+        }
+      } catch (error) {
+        console.error("Error checking wallet state:", error);
+      }
+    };
+    
+    checkWalletState();
+    
+    // Listen for wallet connection/disconnection events
+    const handleWalletConnected = (event) => {
+      setWalletConnected(true);
+      setWalletAddress(event.detail.address);
+    };
+    
+    const handleWalletDisconnected = () => {
+      setWalletConnected(false);
+      setWalletAddress('');
+    };
+    
+    window.addEventListener('walletConnected', handleWalletConnected);
+    window.addEventListener('walletDisconnected', handleWalletDisconnected);
+    
+    return () => {
+      window.removeEventListener('walletConnected', handleWalletConnected);
+      window.removeEventListener('walletDisconnected', handleWalletDisconnected);
+    };
+  }, []); // Empty dependency array to run only once on mount
+
   // Keep the updateProgress function
   const updateProgress = (start, end, duration) => {
     const startTime = Date.now();
@@ -1095,65 +1175,25 @@ const Etherland = () => {
     preloadAstroverse();
   }, []);
 
-  // Simplified wallet connection check - only for Phantom
-  const checkWalletConnection = async () => {
-    // Check for Phantom
-    if (window.solana && window.solana.isPhantom) {
-      try {
-        // Try to connect if already authorized
-        const response = await window.solana.connect({ onlyIfTrusted: true });
-        
-        if (response.publicKey) {
-          setWalletConnected(true);
-          setWalletAddress(response.publicKey.toString());
-          
-          // Check wallet balance
-          const balance = await getSolanaBalance(response.publicKey.toString());
-          setSufficientFunds(balance >= NFT_PRICE_SOL);
-          if (balance < NFT_PRICE_SOL) {
-            setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
-          }
-          
-          setStatusMessage('Wallet connected: ' + response.publicKey.toString().substring(0, 6) + '...');
-        }
-      } catch (error) {
-        // User hasn't authorized the app or wallet not previously connected
-        console.log("Phantom not previously connected. User will need to connect manually.");
-      }
-    } else {
-      console.log("Phantom wallet not detected. Please install Phantom extension.");
-    }
-  };
-
   // Simplified connectWallet - only for Phantom
   const connectPhantom = async () => {
-    if (!window.solana || !window.solana.isPhantom) {
-      alert("Phantom wallet not detected! Please install Phantom extension.");
-      return;
-    }
-    
     try {
       setIsGenerating(true);
       setGenerationStage(0);
       setStatusMessage("Requesting Phantom connection...");
       updateProgress(0, 10, 2000);
       
-      // Make sure Solana Web3 is loaded
-      await loadSolanaWeb3();
+      // Connect using our centralized function
+      const wallet = await connectPhantomWallet();
       
-      // Connect to Phantom
-      const response = await window.solana.connect();
-      
-      if (response.publicKey) {
-        const publicKeyStr = response.publicKey.toString();
-        
+      if (wallet && wallet.address) {
         setWalletConnected(true);
-        setWalletAddress(publicKeyStr);
-        setStatusMessage("Connected to Phantom: " + publicKeyStr.substring(0, 6) + '...');
+        setWalletAddress(wallet.address);
+        setStatusMessage("Connected to Phantom: " + wallet.address.substring(0, 6) + '...');
         
         // Check wallet balance
         try {
-          const balance = await getSolanaBalance(publicKeyStr);
+          const balance = await getSolanaBalance(wallet.address);
           setSufficientFunds(balance >= NFT_PRICE_SOL);
           if (balance < NFT_PRICE_SOL) {
             setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
@@ -1168,10 +1208,10 @@ const Etherland = () => {
         
         updateProgress(10, 15, 1000);
         
-        // Move to next stage after wallet connected
+        // Move to next stage
         setTimeout(() => {
           setGenerationStage(1);
-          setIsGenerating(false); // Don't immediately go to minting
+          setIsGenerating(false);
         }, 1500);
       } else {
         throw new Error("Failed to get public key from Phantom wallet");
@@ -1351,12 +1391,21 @@ const Etherland = () => {
             
             {/* Generate Soul button */}
             <Button 
-              onClick={prepareForMinting} // Go directly to minting
-              disabled={selectedTraits.length < 3 || soulProgress >= 100 || !walletConnected || !sufficientFunds || isMinting || nftMinted}
+              onClick={prepareForMinting}
+              disabled={
+                selectedTraits.length < 3 || 
+                soulProgress >= 100 || 
+                !walletConnected || 
+                !sufficientFunds || 
+                isMinting || 
+                nftMinted
+              }
             >
               {nftMinted ? "Soul Generated" : 
+               !walletConnected ? "Connect Wallet First" :
                !sufficientFunds ? "Insufficient Funds" : 
                isMinting ? "Minting..." : 
+               selectedTraits.length < 3 ? `Select ${3-selectedTraits.length} More Traits` :
                "Generate Soul & Mint NFT"}
             </Button>
           </SoulGenerationContainer>

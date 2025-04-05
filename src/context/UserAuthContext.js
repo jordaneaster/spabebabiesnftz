@@ -1,192 +1,153 @@
-import React, { createContext, useState, useContext, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import supabase from '../utils/supabaseConfig';
-import TABLES from '../utils/supabaseSchema';
+import { ethers } from 'ethers';
 
 const UserAuthContext = createContext();
 
-export function UserAuthProvider({ children }) {
+export const UserAuthContextProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [walletAddress, setWalletAddress] = useState(null);
-  const [walletType, setWalletType] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-
+  const [walletAddress, setWalletAddress] = useState('');
+  const [walletConnected, setWalletConnected] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
   useEffect(() => {
-    // Check for existing session
-    const savedAddress = sessionStorage.getItem('walletAddress');
-    const savedType = sessionStorage.getItem('walletType');
-    
-    if (savedAddress) {
-      setWalletAddress(savedAddress);
-      setWalletType(savedType || 'phantom');
-      fetchUserProfile(savedAddress);
-    } else {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const fetchUserProfile = async (address) => {
-    try {
-      setIsLoading(true);
-      
-      // Check if user exists in database
-      const { data, error } = await supabase
-        .from(TABLES.USERS)
-        .select('*')
-        .eq('wallet_address', address)
-        .single();
-      
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching user profile:', error);
-      }
-      
-      if (data) {
-        setUser(data);
-      } else {
-        // Create new user profile if first time connecting
-        const newUser = {
-          wallet_address: address,
-          username: `Guardian_${address.substring(2, 6)}`,
-          created_at: new Date()
-        };
-        
-        const { data: createdUser, error: createError } = await supabase
-          .from(TABLES.USERS)
-          .insert([newUser])
-          .select()
-          .single();
-          
-        if (createError) {
-          console.error('Error creating user profile:', createError);
+    // Check if user is logged in via Supabase
+    const { data: authListener } = supabase.auth.onAuthStateChange(
+      (event, session) => {
+        if (session) {
+          setUser(session.user);
         } else {
-          setUser(createdUser);
+          setUser(null);
         }
       }
-      
-    } catch (err) {
-      console.error('Failed to fetch or create user profile:', err);
-    } finally {
-      setIsLoading(false);
+    );
+    
+    // Check if wallet is connected in session storage
+    const savedWalletAddress = sessionStorage.getItem('walletAddress');
+    if (savedWalletAddress) {
+      setWalletAddress(savedWalletAddress);
+      setWalletConnected(true);
     }
-  };
-
-  // Connect to Phantom Wallet
-  const connectPhantomWallet = async () => {
-    try {
-      if (window.solana && window.solana.isPhantom) {
-        const response = await window.solana.connect();
-        const address = response.publicKey.toString();
-        
-        sessionStorage.setItem('walletAddress', address);
-        sessionStorage.setItem('walletType', 'phantom');
-        
-        setWalletAddress(address);
-        setWalletType('phantom');
-        
-        await fetchUserProfile(address);
-        return true;
-      } else {
-        alert('Phantom wallet not found. Please install it from https://phantom.app/');
-        return false;
-      }
-    } catch (error) {
-      console.error('Error connecting to Phantom wallet:', error);
-      return false;
-    }
-  };
-
-  // Connect to MetaMask for Polygon
-  const connectMetaMask = async () => {
-    try {
-      if (window.ethereum) {
-        const accounts = await window.ethereum.request({ 
-          method: 'eth_requestAccounts' 
-        });
+    
+    return () => {
+      authListener.unsubscribe(); // Fixed: Added parentheses to call the function
+    };
+  }, []);
+  
+  // Connect wallet function
+  const connectWallet = async () => {
+    if (window.ethereum) {
+      try {
+        setLoading(true);
+        // Request account access
+        const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
         
         const address = accounts[0];
-        
-        // Request switch to Polygon network
-        try {
-          await window.ethereum.request({
-            method: 'wallet_switchEthereumChain',
-            params: [{ chainId: '0x89' }], // Polygon Mainnet
-          });
-        } catch (switchError) {
-          // If Polygon is not added, add it
-          if (switchError.code === 4902) {
-            await window.ethereum.request({
-              method: 'wallet_addEthereumChain',
-              params: [{
-                chainId: '0x89',
-                chainName: 'Polygon Mainnet',
-                nativeCurrency: {
-                  name: 'MATIC',
-                  symbol: 'MATIC',
-                  decimals: 18
-                },
-                rpcUrls: ['https://polygon-rpc.com/'],
-                blockExplorerUrls: ['https://polygonscan.com/']
-              }]
-            });
-          } else {
-            throw switchError;
-          }
-        }
-        
-        sessionStorage.setItem('walletAddress', address);
-        sessionStorage.setItem('walletType', 'metamask');
-        
         setWalletAddress(address);
-        setWalletType('metamask');
+        setWalletConnected(true);
         
-        await fetchUserProfile(address);
-        return true;
-      } else {
-        alert('MetaMask not found. Please install it from https://metamask.io/');
-        return false;
+        // Save to session storage
+        sessionStorage.setItem('walletAddress', address);
+        
+        return address;
+      } catch (error) {
+        console.error("Error connecting wallet:", error);
+        throw error;
+      } finally {
+        setLoading(false);
       }
-    } catch (error) {
-      console.error('Error connecting to MetaMask:', error);
-      return false;
+    } else {
+      window.alert('Please install MetaMask or another Ethereum wallet to connect');
+      throw new Error('No Ethereum wallet detected');
     }
   };
-
-  const logout = async () => {
+  
+  // Disconnect wallet function
+  const disconnectWallet = () => {
+    setWalletAddress('');
+    setWalletConnected(false);
+    sessionStorage.removeItem('walletAddress');
+  };
+  
+  // Sign in with email and password
+  const logIn = async (email, password) => {
     try {
-      if (walletType === 'phantom' && window.solana) {
-        await window.solana.disconnect();
-      }
-      
-      sessionStorage.removeItem('walletAddress');
-      sessionStorage.removeItem('walletType');
-      sessionStorage.removeItem('currentSpaceBaby');
-      
-      setWalletAddress(null);
-      setWalletType(null);
-      setUser(null);
-      
-      return true;
-    } catch (error) {
-      console.error('Error during logout:', error);
-      return false;
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    } finally {
+      setLoading(false);
     }
   };
-
+  
+  // Sign up with email and password
+  const signUp = async (email, password) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signUp({ email, password });
+      if (error) throw error;
+    } catch (err) {
+      console.error(err);
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Log out user
+  const logOut = async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      // Also disconnect wallet when logging out
+      disconnectWallet();
+    } catch (error) {
+      console.error(error);
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  // Connect to contract - Updated for ethers v6
+  const connectToContract = async (contractAddress, contractABI) => {
+    if (!walletConnected) {
+      throw new Error('Wallet not connected');
+    }
+    
+    try {
+      // Updated for ethers v6
+      const provider = new ethers.BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      return new ethers.Contract(contractAddress, contractABI, signer);
+    } catch (error) {
+      console.error('Error connecting to contract:', error);
+      throw error;
+    }
+  };
+  
   const value = {
     user,
     walletAddress,
-    walletType,
-    isLoading,
-    connectPhantomWallet,
-    connectMetaMask,
-    logout
+    walletConnected,
+    loading,
+    connectWallet,
+    disconnectWallet,
+    logIn,
+    signUp,
+    logOut,
+    connectToContract
   };
-
+  
   return (
     <UserAuthContext.Provider value={value}>
       {children}
     </UserAuthContext.Provider>
   );
-}
+};
 
 export const useUserAuth = () => {
   return useContext(UserAuthContext);

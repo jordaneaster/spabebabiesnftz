@@ -304,6 +304,22 @@ const UserProfile = () => {
       try {
         let address = storedWallet;
         
+        // Check for phantom wallet first
+        if (!address && window.solana && window.solana.isPhantom) {
+          try {
+            // For Phantom, we should try connection with existing permissions first
+            const response = await window.solana.connect({ onlyIfTrusted: true });
+            if (response.publicKey) {
+              address = response.publicKey.toString();
+              console.log("Connected to Phantom wallet:", address);
+            }
+          } catch (error) {
+            console.error("Phantom auto-connect error:", error);
+            // If auto-connect fails, we don't try to prompt for connection here
+          }
+        }
+        
+        // Then check for ethereum
         if (!address && window.ethereum) {
           const accounts = await window.ethereum.request({ method: 'eth_accounts' });
           if (accounts.length > 0) {
@@ -311,14 +327,12 @@ const UserProfile = () => {
           }
         }
         
-        if (!address && window.solana && window.solana.isPhantom) {
-          try {
-            const response = await window.solana.connect({ onlyIfTrusted: true });
-            if (response.publicKey) {
-              address = response.publicKey.toString();
-            }
-          } catch (error) {
-            console.error("Phantom error:", error);
+        // Try to get the address from localStorage as a fallback
+        if (!address) {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+          if (currentUser && currentUser.wallet_address) {
+            address = currentUser.wallet_address;
+            console.log("Using wallet address from local storage:", address);
           }
         }
         
@@ -342,24 +356,29 @@ const UserProfile = () => {
       console.log("Loading profile for wallet:", address);
       
       // Get user profile from supabase
+      // First, determine if this is a Phantom (Solana) or Ethereum address
+      const isEthAddress = address.startsWith('0x');
+      console.log(`Detected ${isEthAddress ? 'Ethereum' : 'Solana'} wallet address`);
+      
+      // Get user profile from supabase
       const { data: profile, error: profileError } = await supabase
         .from(TABLES.USERS)
         .select('*')
         .eq('wallet_address', address)
         .single();
       
-      if (profileError && profileError.code !== 'PGRST116') {
-        console.error("Error fetching user profile:", profileError);
-        throw profileError;
+      if (profileError) {
+        console.log("Error fetching user profile:", profileError);
+        if (profileError.code !== 'PGRST116') {
+          throw profileError;
+        }
       }
       
       // Get all babies associated with this user by wallet_address
-      // This ensures we find babies even if they were created without a proper user_id linkage
       const { data: babies, error: babiesError } = await supabase
         .from(TABLES.BABIES)
         .select('*')
         .eq('wallet_address', address)
-        .eq('soul_generation_complete', true)
         .order('created_at', { ascending: false });
       
       if (babiesError) {
@@ -368,61 +387,99 @@ const UserProfile = () => {
       }
       
       // If no babies found by wallet_address, try looking up by user_id
+      let finalBabies = [];
+      
       if ((!babies || babies.length === 0) && profile && profile.id) {
         const { data: userBabies, error: userBabiesError } = await supabase
           .from(TABLES.BABIES)
           .select('*')
           .eq('user_id', profile.id)
-          .eq('soul_generation_complete', true)
           .order('created_at', { ascending: false });
         
         if (userBabiesError) {
           console.error("Error fetching user's babies by user_id:", userBabiesError);
         } else if (userBabies && userBabies.length > 0) {
           console.log("Found babies by user_id:", userBabies.length);
-          // Set babies found by user_id
-          setUserBabies(userBabies.filter(baby => baby.image_url));
+          finalBabies = userBabies.filter(baby => baby.image_url);
         }
-      } else {
-        console.log("Found babies by wallet_address:", babies?.length || 0);
-        
-        // Set babies found by wallet_address
-        setUserBabies(babies?.filter(baby => baby.image_url) || []);
+      } else if (babies && babies.length > 0) {
+        console.log("Found babies by wallet_address:", babies.length);
+        finalBabies = babies.filter(baby => baby.image_url);
       }
       
-      // Also check session storage for recently minted babies that might not be in the database yet
+      // Also check session storage for recently minted babies
       try {
+        const spaceBaby = JSON.parse(sessionStorage.getItem('currentSpaceBaby'));
         const sessionBabies = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
+        
+        console.log("Space baby from session:", spaceBaby);
+        console.log("All session babies:", sessionBabies.length);
+        
         if (sessionBabies.length > 0) {
-          console.log("Found babies in session storage:", sessionBabies.length);
-          
           // Format session babies to match database structure
           const formattedSessionBabies = sessionBabies.map(baby => ({
-            id: baby.id,
+            id: baby.id || Math.random().toString(36).substring(2),
             name: baby.name,
             image_url: baby.image,
-            attributes: baby.attributes.reduce((obj, attr) => {
-              obj[attr.trait_type] = attr.value;
-              return obj;
-            }, {}),
+            attributes: Array.isArray(baby.attributes) 
+              ? baby.attributes.reduce((obj, attr) => {
+                  obj[attr.trait_type] = attr.value;
+                  return obj;
+                }, {})
+              : baby.attributes || {},
             created_at: baby.mintedAt || new Date().toISOString(),
             wallet_address: address
           }));
           
-          // Combine with existing babies, removing duplicates by ID
-          const existingIds = new Set(userBabies.map(baby => baby.id));
-          const uniqueSessionBabies = formattedSessionBabies.filter(baby => !existingIds.has(baby.id));
+          // Combine with existing babies, avoiding duplicates
+          const existingIds = new Set(finalBabies.map(baby => baby.id));
+          const uniqueSessionBabies = formattedSessionBabies.filter(baby => 
+            !existingIds.has(baby.id) && baby.image_url
+          );
+          
+          console.log("Adding unique session babies:", uniqueSessionBabies.length);
           
           if (uniqueSessionBabies.length > 0) {
-            setUserBabies(prev => [...prev, ...uniqueSessionBabies]);
+            finalBabies = [...finalBabies, ...uniqueSessionBabies];
+          }
+        }
+        
+        // If there's a current baby in session and it's not already in our list, add it
+        if (spaceBaby && spaceBaby.image) {
+          const alreadyExists = finalBabies.some(baby => 
+            baby.id === spaceBaby.id || baby.image_url === spaceBaby.image
+          );
+          
+          if (!alreadyExists) {
+            console.log("Adding current space baby from session");
+            finalBabies.push({
+              id: spaceBaby.id || Math.random().toString(36).substring(2),
+              name: spaceBaby.name,
+              image_url: spaceBaby.image,
+              attributes: Array.isArray(spaceBaby.attributes) 
+                ? spaceBaby.attributes.reduce((obj, attr) => {
+                    obj[attr.trait_type] = attr.value;
+                    return obj;
+                  }, {})
+                : spaceBaby.attributes || {},
+              created_at: new Date().toISOString(),
+              wallet_address: address
+            });
           }
         }
       } catch (sessionError) {
         console.warn("Error checking session storage:", sessionError);
       }
       
+      // Set the final babies
+      setUserBabies(finalBabies);
+      
       // If we have a profile, use it, otherwise construct a minimal profile
-      setUserProfile(profile || { wallet_address: address });
+      setUserProfile(profile || { 
+        wallet_address: address,
+        wallet_type: address.startsWith('0x') ? 'metamask' : 'phantom'
+      });
+      
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading profile:", error);

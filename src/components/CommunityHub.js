@@ -4,6 +4,10 @@ import { Link } from 'react-router-dom';
 import supabase from '../utils/supabaseConfig';
 import Footer from './Footer';
 import bgr from '../assets/media/BGR3.png';
+import { useUserAuth } from '../context/UserAuthContext';
+import { ethers } from 'ethers';
+import { FaInfoCircle, FaEthereum, FaRocket, FaWallet, FaExchangeAlt, FaLock } from 'react-icons/fa';
+import Tooltip from './Tooltip'; // You'll need to create this component
 
 // Animations
 const pulse = keyframes`
@@ -612,7 +616,466 @@ const SectionTitle = styled.h3`
   margin-bottom: 0.5rem;
 `;
 
-// Sample data
+// Add these new styled components for Web3 interactions
+const Web3Section = styled.div`
+  background: linear-gradient(135deg, rgba(36, 37, 38, 0.8), rgba(25, 26, 27, 0.9));
+  border-radius: 20px;
+  padding: 2rem;
+  margin-top: 2rem;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+  border: 1px solid rgba(155, 81, 224, 0.2);
+  
+  h2 {
+    font-size: ${props => props.theme.fontxl};
+    margin-bottom: 2rem;
+    text-align: center;
+    color: #aeff00;
+    text-shadow: 0 0 15px rgba(174, 255, 0, 0.3);
+    
+    @media (max-width: 768px) {
+      font-size: ${props => props.theme.fontlg};
+    }
+  }
+`;
+
+const ContractGrid = styled.div`
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 1.5rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const ContractCard = styled.div`
+  background: rgba(20, 21, 23, 0.7);
+  border-radius: 15px;
+  overflow: hidden;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(48, 129, 237, 0.2);
+  
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 7px 20px rgba(48, 129, 237, 0.3);
+    border-color: rgba(48, 129, 237, 0.5);
+  }
+`;
+
+const ContractHeader = styled.div`
+  background: linear-gradient(90deg, #3081ed, #9b51e0);
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  
+  h3 {
+    font-size: ${props => props.theme.fontmd};
+    color: white;
+    margin: 0;
+  }
+  
+  svg {
+    font-size: 1.5rem;
+    color: white;
+  }
+`;
+
+const ContractContent = styled.div`
+  padding: 1.5rem;
+  
+  p {
+    color: ${props => `rgba(${props.theme.textRgba}, 0.8)`};
+    font-size: ${props => props.theme.fontsm};
+    margin-bottom: 1.5rem;
+    line-height: 1.6;
+  }
+  
+  .contract-address {
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(48, 129, 237, 0.3);
+    border-radius: 8px;
+    padding: 0.75rem;
+    font-family: monospace;
+    font-size: 0.8rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1.5rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    
+    button {
+      background: rgba(48, 129, 237, 0.2);
+      border: none;
+      color: #3081ed;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      
+      &:hover {
+        background: rgba(48, 129, 237, 0.4);
+      }
+    }
+  }
+`;
+
+const ActionGroup = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+`;
+
+const WalletStatus = styled.div`
+  background: ${props => props.connected ? 
+    'linear-gradient(90deg, rgba(174, 255, 0, 0.2), rgba(76, 175, 80, 0.2))' : 
+    'linear-gradient(90deg, rgba(244, 67, 54, 0.1), rgba(244, 67, 54, 0.2))'
+  };
+  border: 1px solid ${props => props.connected ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'};
+  border-radius: 8px;
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+  
+  p {
+    margin: 0;
+    display: flex;
+    align-items: center;
+    
+    svg {
+      margin-right: 0.5rem;
+      color: ${props => props.connected ? '#4CAF50' : '#F44336'};
+    }
+    
+    span {
+      color: ${props => props.connected ? '#4CAF50' : '#F44336'};
+      font-weight: bold;
+    }
+  }
+`;
+
+const NetworkSelector = styled.div`
+  background: rgba(20, 21, 23, 0.5);
+  border-radius: 12px;
+  padding: 0.5rem;
+  display: flex;
+  margin-bottom: 2rem;
+  
+  button {
+    flex: 1;
+    background: transparent;
+    border: none;
+    padding: 0.8rem 1.2rem;
+    border-radius: 8px;
+    color: ${props => `rgba(${props.theme.textRgba}, 0.8)`};
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+    position: relative;
+    
+    &.active {
+      background: linear-gradient(90deg, #3081ed, #9b51e0);
+      color: white;
+      font-weight: 600;
+      box-shadow: 0 5px 15px rgba(48, 129, 237, 0.3);
+    }
+    
+    &:hover:not(.active) {
+      color: white;
+      background: rgba(48, 129, 237, 0.1);
+    }
+    
+    .network-indicator {
+      position: absolute;
+      top: 0.5rem;
+      right: 0.5rem;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background-color: ${props => props.mainnet ? '#4CAF50' : '#FF9800'};
+    }
+  }
+`;
+
+const FormField = styled.div`
+  margin-bottom: 1.2rem;
+  
+  label {
+    display: block;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+    color: ${props => `rgba(${props.theme.textRgba}, 0.9)`};
+    display: flex;
+    align-items: center;
+    
+    svg {
+      margin-right: 0.5rem;
+      color: #9b51e0;
+    }
+  }
+  
+  input, select {
+    width: 100%;
+    background: rgba(0, 0, 0, 0.3);
+    border: 1px solid rgba(155, 81, 224, 0.3);
+    border-radius: 8px;
+    padding: 0.75rem 1rem;
+    color: white;
+    font-size: 1rem;
+    
+    &:focus {
+      outline: none;
+      border-color: #9b51e0;
+    }
+  }
+  
+  .helper-text {
+    margin-top: 0.4rem;
+    font-size: 0.8rem;
+    color: ${props => `rgba(${props.theme.textRgba}, 0.6)`};
+    display: flex;
+    align-items: center;
+    
+    svg {
+      margin-right: 0.3rem;
+      color: #3081ed;
+    }
+  }
+  
+  .tooltip-icon {
+    margin-left: 0.5rem;
+    color: ${props => `rgba(${props.theme.textRgba}, 0.5)`};
+    cursor: help;
+    position: relative;
+    display: inline-flex;
+    
+    &:hover .tooltip {
+      display: block;
+    }
+    
+    .tooltip {
+      display: none;
+      position: absolute;
+      background: rgba(36, 37, 38, 0.95);
+      color: white;
+      padding: 0.75rem;
+      border-radius: 8px;
+      width: 200px;
+      font-size: 0.8rem;
+      bottom: 100%;
+      left: 50%;
+      transform: translateX(-50%);
+      margin-bottom: 0.5rem;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+      border: 1px solid rgba(155, 81, 224, 0.3);
+      z-index: 10;
+      
+      &:after {
+        content: '';
+        position: absolute;
+        top: 100%;
+        left: 50%;
+        border: 8px solid transparent;
+        border-top-color: rgba(36, 37, 38, 0.95);
+        transform: translateX(-50%);
+      }
+    }
+  }
+`;
+
+const TransactionHistory = styled.div`
+  margin-top: 3rem;
+  
+  h3 {
+    font-size: ${props => props.theme.fontlg};
+    margin-bottom: 1.5rem;
+    color: #3081ed;
+  }
+  
+  .history-item {
+    background: rgba(20, 21, 23, 0.5);
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    margin-bottom: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-left: 4px solid;
+    transition: all 0.3s ease;
+    
+    &:hover {
+      transform: translateX(5px);
+    }
+    
+    &.success {
+      border-left-color: #4CAF50;
+      
+      .status {
+        color: #4CAF50;
+      }
+    }
+    
+    &.pending {
+      border-left-color: #FF9800;
+      
+      .status {
+        color: #FF9800;
+      }
+    }
+    
+    &.failed {
+      border-left-color: #F44336;
+      
+      .status {
+        color: #F44336;
+      }
+    }
+    
+    .tx-info {
+      flex: 1;
+      
+      .title {
+        font-weight: bold;
+        margin-bottom: 0.3rem;
+      }
+      
+      .hash {
+        font-family: monospace;
+        font-size: 0.8rem;
+        color: ${props => `rgba(${props.theme.textRgba}, 0.6)`};
+      }
+    }
+    
+    .status {
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      
+      svg {
+        margin-right: 0.3rem;
+      }
+    }
+  }
+`;
+
+const StatsOverview = styled.div`
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1.5rem;
+  margin-bottom: 2rem;
+  
+  @media (max-width: 768px) {
+    grid-template-columns: 1fr;
+  }
+`;
+
+const StatCard = styled.div`
+  background: rgba(20, 21, 23, 0.7);
+  border-radius: 15px;
+  padding: 1.5rem;
+  text-align: center;
+  transition: all 0.3s ease;
+  border: 1px solid rgba(48, 129, 237, 0.1);
+  animation: ${float} 5s ease-in-out infinite;
+  animation-delay: ${props => props.delay || '0s'};
+  
+  &:hover {
+    border-color: rgba(48, 129, 237, 0.5);
+    transform: translateY(-5px);
+  }
+  
+  .stat-icon {
+    font-size: 2rem;
+    color: #9b51e0;
+    margin-bottom: 0.5rem;
+  }
+  
+  .stat-value {
+    font-size: ${props => props.theme.fontxl};
+    font-weight: bold;
+    background: linear-gradient(90deg, #3081ed, #9b51e0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    margin-bottom: 0.5rem;
+  }
+  
+  .stat-label {
+    font-size: ${props => props.theme.fontsm};
+    color: ${props => `rgba(${props.theme.textRgba}, 0.8)`};
+  }
+`;
+
+// Sample contract data
+const contractsInfo = [
+  {
+    name: 'Space Babiez NFT',
+    icon: <FaRocket />,
+    description: 'The main NFT contract for minting and managing your Space Babiez collection.',
+    address: '0x1234567890123456789012345678901234567890',
+    functions: [
+      { name: 'Mint Space Baby', price: '0.08 ETH' },
+      { name: 'Level Up Baby', price: 'Gas only' }
+    ]
+  },
+  {
+    name: 'AstroMilk Token',
+    icon: <FaEthereum />,
+    description: 'ERC20 governance token used for rewards and community participation.',
+    address: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+    functions: [
+      { name: 'Transfer AMLK', price: 'Gas only' },
+      { name: 'Approve Spending', price: 'Gas only' }
+    ]
+  },
+  {
+    name: 'NFT Staking',
+    icon: <FaLock />,
+    description: 'Stake your Space Babiez to earn AstroMilk tokens as passive income.',
+    address: '0x9876543210987654321098765432109876543210',
+    functions: [
+      { name: 'Stake NFT', price: 'Gas only' },
+      { name: 'Claim Rewards', price: 'Gas only' },
+      { name: 'Unstake NFT', price: 'Gas only' }
+    ]
+  }
+];
+
+// Mock transaction data
+const mockTransactions = [
+  {
+    id: 1,
+    title: 'Minted Space Baby #1234',
+    hash: '0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef',
+    status: 'success',
+    timestamp: '2023-11-30T15:45:22'
+  },
+  {
+    id: 2,
+    title: 'Staked Space Baby #1234',
+    hash: '0xabcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890',
+    status: 'pending',
+    timestamp: '2023-11-30T16:12:05'
+  },
+  {
+    id: 3,
+    title: 'Claimed 45 AMLK Rewards',
+    hash: '0x7890abcdef1234567890abcdef1234567890abcdef1234567890abcdef12345',
+    status: 'success',
+    timestamp: '2023-11-29T12:30:15'
+  },
+  {
+    id: 4,
+    title: 'Voted on Proposal #12',
+    hash: '0xdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890ab',
+    status: 'failed',
+    timestamp: '2023-11-28T09:15:45'
+  }
+];
+
+// Sample data - Add these back to fix the undefined variables
 const initiatives = [
   {
     id: 1,
@@ -709,12 +1172,18 @@ const events = [
 const CommunityHub = () => {
   const [activeTab, setActiveTab] = useState('initiatives');
   const [userVotes, setUserVotes] = useState({});
-  const [walletConnected, setWalletConnected] = useState(false);
+  const { walletAddress, walletConnected, connectWallet } = useUserAuth();
+  const [selectedNetwork, setSelectedNetwork] = useState('mainnet');
+  const [mintAmount, setMintAmount] = useState(1);
+  const [tokenId, setTokenId] = useState('');
+  const [transactions, setTransactions] = useState(mockTransactions);
+  const [processing, setProcessing] = useState(false);
+  const [selectedContract, setSelectedContract] = useState(null);
+  const [showTooltip, setShowTooltip] = useState({});
   
   useEffect(() => {
     // Check if wallet is connected from session storage
     const walletAddress = sessionStorage.getItem('walletAddress');
-    setWalletConnected(!!walletAddress);
     
     // In a real implementation, we would fetch user votes from the database
     // For now, we'll use a mock
@@ -725,6 +1194,78 @@ const CommunityHub = () => {
     });
   }, []);
   
+  const handleCopyAddress = (address) => {
+    navigator.clipboard.writeText(address);
+    alert('Contract address copied to clipboard!');
+  };
+  
+  const handleMint = async () => {
+    if (!walletConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+    
+    setProcessing(true);
+    
+    try {
+      // Simulate a blockchain transaction
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Add the transaction to our list
+      const newTx = {
+        id: Date.now(),
+        title: `Minted Space Baby #${1000 + Math.floor(Math.random() * 9000)}`,
+        hash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        status: 'success',
+        timestamp: new Date().toISOString()
+      };
+      
+      setTransactions([newTx, ...transactions]);
+      alert('Successfully minted a new Space Baby!');
+    } catch (error) {
+      console.error('Minting error:', error);
+      alert('Error minting: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+  
+  const handleStake = async () => {
+    if (!walletConnected) {
+      alert('Please connect your wallet first');
+      return;
+    }
+    
+    if (!tokenId) {
+      alert('Please enter a token ID');
+      return;
+    }
+    
+    setProcessing(true);
+    
+    try {
+      // Simulate a blockchain transaction
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      
+      // Add the transaction to our list
+      const newTx = {
+        id: Date.now(),
+        title: `Staked Space Baby #${tokenId}`,
+        hash: `0x${Math.random().toString(16).substring(2, 66)}`,
+        status: 'pending',
+        timestamp: new Date().toISOString()
+      };
+      
+      setTransactions([newTx, ...transactions]);
+      alert(`Staking transaction submitted for Space Baby #${tokenId}!`);
+    } catch (error) {
+      console.error('Staking error:', error);
+      alert('Error staking: ' + error.message);
+    } finally {
+      setProcessing(false);
+    }
+  };
+  
   const handleVote = (proposalId, voteType) => {
     // In a real implementation, we would send this vote to the database
     // For now, we'll just update the local state
@@ -733,13 +1274,31 @@ const CommunityHub = () => {
       [proposalId]: voteType
     }));
     
-    // Update the vote counts in the proposals (just for demo)
-    // In a real app, this would come from the database after voting
+    // Simulate a transaction
+    const newTx = {
+      id: Date.now(),
+      title: `Voted ${voteType} on Proposal #${proposalId}`,
+      hash: `0x${Math.random().toString(16).substring(2, 66)}`,
+      status: 'pending',
+      timestamp: new Date().toISOString()
+    };
+    
+    setTransactions([newTx, ...transactions]);
+    alert(`Your vote (${voteType}) on proposal #${proposalId} has been submitted!`);
   };
   
   const handleSupportInitiative = (initiativeId) => {
     // In a real implementation, we would send a transaction or update the database
-    alert(`You've supported initiative #${initiativeId}! This would trigger a transaction in a real implementation.`);
+    const newTx = {
+      id: Date.now(),
+      title: `Supported Initiative #${initiativeId}`,
+      hash: `0x${Math.random().toString(16).substring(2, 66)}`,
+      status: 'success',
+      timestamp: new Date().toISOString()
+    };
+    
+    setTransactions([newTx, ...transactions]);
+    alert(`You've supported initiative #${initiativeId}! Thank you for your contribution.`);
   };
   
   const formatDate = (dateString) => {
@@ -749,6 +1308,234 @@ const CommunityHub = () => {
       month: date.toLocaleString('default', { month: 'short' })
     };
   };
+  
+  const renderContractInteraction = () => {
+    if (!selectedContract) {
+      return (
+        <div style={{ textAlign: 'center', padding: '2rem' }}>
+          <p>Select a contract to interact with its functions</p>
+        </div>
+      );
+    }
+    
+    const contract = contractsInfo.find(c => c.name === selectedContract);
+    
+    return (
+      <div>
+        <h3 style={{ marginBottom: '1.5rem', color: '#3081ed' }}>{contract.name} Functions</h3>
+        
+        {contract.name === 'Space Babiez NFT' && (
+          <>
+            <FormField>
+              <label>
+                <FaRocket /> Mint New Space Baby
+                <span className="tooltip-icon">
+                  <FaInfoCircle />
+                  <span className="tooltip">
+                    Create a new Space Baby NFT. Each Space Baby has unique traits and can level up over time.
+                  </span>
+                </span>
+              </label>
+              <input 
+                type="number" 
+                min="1" 
+                max="5"
+                placeholder="Number of Space Babiez to mint" 
+                value={mintAmount}
+                onChange={(e) => setMintAmount(parseInt(e.target.value) || 1)}
+              />
+              <div className="helper-text">
+                <FaInfoCircle /> Cost: {(mintAmount * 0.08).toFixed(2)} ETH
+              </div>
+            </FormField>
+            
+            <ActionButton 
+              onClick={handleMint}
+              disabled={processing || !walletConnected}
+            >
+              {processing ? 'Processing...' : 'Mint Space Baby'}
+            </ActionButton>
+          </>
+        )}
+        
+        {contract.name === 'NFT Staking' && (
+          <>
+            <FormField>
+              <label>
+                <FaLock /> Stake Your Space Baby
+                <span className="tooltip-icon">
+                  <FaInfoCircle />
+                  <span className="tooltip">
+                    Lock up your Space Baby to earn AstroMilk tokens as rewards. The longer you stake, the more you earn!
+                  </span>
+                </span>
+              </label>
+              <input 
+                type="number"
+                placeholder="Space Baby Token ID" 
+                value={tokenId}
+                onChange={(e) => setTokenId(e.target.value)}
+              />
+            </FormField>
+            
+            <FormField>
+              <label>Staking Period</label>
+              <select>
+                <option value="30">30 days (10% APY)</option>
+                <option value="90">90 days (15% APY)</option>
+                <option value="180">180 days (20% APY)</option>
+                <option value="365">365 days (25% APY)</option>
+              </select>
+            </FormField>
+            
+            <ActionButton 
+              onClick={handleStake}
+              disabled={processing || !walletConnected || !tokenId}
+            >
+              {processing ? 'Processing...' : 'Stake Space Baby'}
+            </ActionButton>
+          </>
+        )}
+        
+        {contract.name === 'AstroMilk Token' && (
+          <>
+            <FormField>
+              <label>
+                <FaExchangeAlt /> Transfer AstroMilk Tokens
+                <span className="tooltip-icon">
+                  <FaInfoCircle />
+                  <span className="tooltip">
+                    Send AstroMilk tokens to another wallet address. These tokens can be used for governance voting and special perks.
+                  </span>
+                </span>
+              </label>
+              <input type="text" placeholder="Recipient Address (0x...)" />
+            </FormField>
+            
+            <FormField>
+              <label>Amount of AMLK</label>
+              <input type="number" placeholder="Amount to send" />
+            </FormField>
+            
+            <ActionButton 
+              onClick={() => alert('Token transfer would happen here')}
+              disabled={processing || !walletConnected}
+            >
+              {processing ? 'Processing...' : 'Transfer Tokens'}
+            </ActionButton>
+          </>
+        )}
+      </div>
+    );
+  };
+  
+  const renderWeb3Portal = () => (
+    <Web3Section>
+      <h2>Web3 Portal</h2>
+      
+      <WalletStatus connected={walletConnected}>
+        <p>
+          <FaWallet />
+          <span>
+            {walletConnected 
+              ? `Connected: ${walletAddress.substring(0, 6)}...${walletAddress.substring(walletAddress.length - 4)}` 
+              : 'Wallet Disconnected'}
+          </span>
+        </p>
+        
+        {!walletConnected && (
+          <ActionButton onClick={connectWallet}>
+            Connect Wallet
+          </ActionButton>
+        )}
+      </WalletStatus>
+      
+      <NetworkSelector mainnet={selectedNetwork === 'mainnet'}>
+        <button 
+          className={selectedNetwork === 'mainnet' ? 'active' : ''}
+          onClick={() => setSelectedNetwork('mainnet')}
+        >
+          Ethereum Mainnet
+          <span className="network-indicator"></span>
+        </button>
+        <button 
+          className={selectedNetwork === 'polygon' ? 'active' : ''}
+          onClick={() => setSelectedNetwork('polygon')}
+        >
+          Polygon Network
+          <span className="network-indicator"></span>
+        </button>
+        <button 
+          className={selectedNetwork === 'testnet' ? 'active' : ''}
+          onClick={() => setSelectedNetwork('testnet')}
+        >
+          Goerli Testnet
+          <span className="network-indicator"></span>
+        </button>
+      </NetworkSelector>
+      
+      <StatsOverview>
+        <StatCard delay="0s">
+          <div className="stat-icon"><FaRocket /></div>
+          <div className="stat-value">12,547</div>
+          <div className="stat-label">Space Babiez Minted</div>
+        </StatCard>
+        
+        <StatCard delay="0.2s">
+          <div className="stat-icon"><FaLock /></div>
+          <div className="stat-value">5,283</div>
+          <div className="stat-label">Space Babiez Staked</div>
+        </StatCard>
+        
+        <StatCard delay="0.4s">
+          <div className="stat-icon"><FaEthereum /></div>
+          <div className="stat-value">1.45M</div>
+          <div className="stat-label">AMLK in Circulation</div>
+        </StatCard>
+      </StatsOverview>
+      
+      <ContractGrid>
+        {contractsInfo.map((contract, index) => (
+          <ContractCard key={index}>
+            <ContractHeader>
+              <h3>{contract.name}</h3>
+              {contract.icon}
+            </ContractHeader>
+            <ContractContent>
+              <p>{contract.description}</p>
+              <div className="contract-address">
+                <span>{contract.address.substring(0, 6)}...{contract.address.substring(contract.address.length - 4)}</span>
+                <button onClick={() => handleCopyAddress(contract.address)}>Copy</button>
+              </div>
+              <ActionButton onClick={() => setSelectedContract(contract.name)}>
+                Interact with Contract
+              </ActionButton>
+            </ContractContent>
+          </ContractCard>
+        ))}
+      </ContractGrid>
+      
+      {renderContractInteraction()}
+      
+      <TransactionHistory>
+        <h3>Recent Transactions</h3>
+        {transactions.slice(0, 5).map(tx => (
+          <div key={tx.id} className={`history-item ${tx.status}`}>
+            <div className="tx-info">
+              <div className="title">{tx.title}</div>
+              <div className="hash">{tx.hash.substring(0, 10)}...{tx.hash.substring(tx.hash.length - 8)}</div>
+            </div>
+            <div className="status">
+              {tx.status === 'success' && <FaRocket />}
+              {tx.status === 'pending' && <span>⏳</span>}
+              {tx.status === 'failed' && <span>❌</span>}
+              {tx.status.charAt(0).toUpperCase() + tx.status.slice(1)}
+            </div>
+          </div>
+        ))}
+      </TransactionHistory>
+    </Web3Section>
+  );
   
   const renderInitiatives = () => (
     <InitiativesGrid>
@@ -954,23 +1741,39 @@ const CommunityHub = () => {
         <Container>
           <Title>Community Hub</Title>
           
-          <CommunitySection>
-            <SectionTitle>Community Chat</SectionTitle>
-            <p style={{ color: 'white' }}>Connect with other Space Babiez collectors and discuss the latest updates.</p>
-            {/* Chat component would go here */}
-          </CommunitySection>
+          <TabsContainer>
+            <Tab 
+              active={activeTab === 'initiatives'} 
+              onClick={() => setActiveTab('initiatives')}
+            >
+              Initiatives
+            </Tab>
+            <Tab 
+              active={activeTab === 'governance'} 
+              onClick={() => setActiveTab('governance')}
+            >
+              Governance
+            </Tab>
+            <Tab 
+              active={activeTab === 'events'} 
+              onClick={() => setActiveTab('events')}
+            >
+              Events
+            </Tab>
+            <Tab 
+              active={activeTab === 'web3'} 
+              onClick={() => setActiveTab('web3')}
+            >
+              Web3 Portal
+            </Tab>
+          </TabsContainer>
           
-          <CommunitySection>
-            <SectionTitle>Upcoming Events</SectionTitle>
-            <p style={{ color: 'white' }}>Don't miss out on our community events and NFT drops!</p>
-            {/* Events list would go here */}
-          </CommunitySection>
-          
-          <CommunitySection>
-            <SectionTitle>Community Leaderboard</SectionTitle>
-            <p style={{ color: 'white' }}>See who's making the biggest impact in our community.</p>
-            {/* Leaderboard component would go here */}
-          </CommunitySection>
+          <ContentContainer>
+            {activeTab === 'initiatives' && renderInitiatives()}
+            {activeTab === 'governance' && renderGovernance()}
+            {activeTab === 'events' && renderEvents()}
+            {activeTab === 'web3' && renderWeb3Portal()}
+          </ContentContainer>
         </Container>
       </Section>
       <Footer />
