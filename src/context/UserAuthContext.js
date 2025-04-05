@@ -1,153 +1,193 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useState, useContext, useEffect } from 'react';
 import supabase from '../utils/supabaseConfig';
+import TABLES from '../utils/supabaseSchema';
 
-const UserAuthContext = createContext(null);
+const UserAuthContext = createContext();
 
-export const UserAuthProvider = ({ children }) => {
-  const [currentUser, setCurrentUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [spaceBaby, setSpaceBaby] = useState(null);
-  const [walletType, setWalletType] = useState(null); // Track wallet type (phantom or metamask)
+export function UserAuthProvider({ children }) {
+  const [user, setUser] = useState(null);
+  const [walletAddress, setWalletAddress] = useState(null);
+  const [walletType, setWalletType] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  // Check for stored wallet on app load
   useEffect(() => {
-    const checkUser = async () => {
-      const storedWallet = localStorage.getItem('phantomWalletAddress') || localStorage.getItem('metamaskWalletAddress');
-      const storedWalletType = localStorage.getItem('walletType');
-      
-      if (storedWallet) {
-        try {
-          // Get user from database
-          const { data: user, error } = await supabase
-            .from('space_baby_users')
-            .select('*')
-            .eq('wallet_address', storedWallet)
-            .single();
-
-          if (user) {
-            setCurrentUser(user);
-            setWalletType(storedWalletType || 'phantom'); // Default to phantom if not specified
-            
-            // Get associated space baby if exists
-            const { data: baby } = await supabase
-              .from('space_babies')
-              .select('*')
-              .eq('wallet_address', storedWallet)
-              .single();
-              
-            if (baby) setSpaceBaby(baby);
-          }
-        } catch (error) {
-          console.error("Error fetching user:", error);
-        }
-      }
-      setLoading(false);
-    };
-
-    checkUser();
+    // Check for existing session
+    const savedAddress = sessionStorage.getItem('walletAddress');
+    const savedType = sessionStorage.getItem('walletType');
+    
+    if (savedAddress) {
+      setWalletAddress(savedAddress);
+      setWalletType(savedType || 'phantom');
+      fetchUserProfile(savedAddress);
+    } else {
+      setIsLoading(false);
+    }
   }, []);
 
-  // Register or update user in database
-  const saveUserToDatabase = async (walletAddress, walletType = 'phantom') => {
+  const fetchUserProfile = async (address) => {
     try {
-      // Check if user exists
-      const { data: existingUser } = await supabase
-        .from('space_baby_users')
+      setIsLoading(true);
+      
+      // Check if user exists in database
+      const { data, error } = await supabase
+        .from(TABLES.USERS)
         .select('*')
-        .eq('wallet_address', walletAddress)
+        .eq('wallet_address', address)
         .single();
-
-      if (existingUser) {
-        // Update existing user
-        const { data, error } = await supabase
-          .from('space_baby_users')
-          .update({ updated_at: new Date().toISOString() })
-          .eq('wallet_address', walletAddress)
-          .select();
-          
-        if (error) throw error;
-        setCurrentUser(data[0]);
-        setWalletType(walletType);
-        localStorage.setItem('walletType', walletType);
-        return data[0];
-      } else {
-        // Create new user
-        const { data, error } = await supabase
-          .from('space_baby_users')
-          .insert([
-            { 
-              wallet_address: walletAddress, 
-              wallet_type: walletType,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }
-          ])
-          .select();
-          
-        if (error) throw error;
-        setCurrentUser(data[0]);
-        setWalletType(walletType);
-        localStorage.setItem('walletType', walletType);
-        return data[0];
+      
+      if (error && error.code !== 'PGRST116') {
+        console.error('Error fetching user profile:', error);
       }
-    } catch (error) {
-      console.error("Error saving user to database:", error);
-      throw error;
+      
+      if (data) {
+        setUser(data);
+      } else {
+        // Create new user profile if first time connecting
+        const newUser = {
+          wallet_address: address,
+          username: `Guardian_${address.substring(2, 6)}`,
+          created_at: new Date()
+        };
+        
+        const { data: createdUser, error: createError } = await supabase
+          .from(TABLES.USERS)
+          .insert([newUser])
+          .select()
+          .single();
+          
+        if (createError) {
+          console.error('Error creating user profile:', createError);
+        } else {
+          setUser(createdUser);
+        }
+      }
+      
+    } catch (err) {
+      console.error('Failed to fetch or create user profile:', err);
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  // Logout function - handles both Phantom and MetaMask
-  const logout = async () => {
+  // Connect to Phantom Wallet
+  const connectPhantomWallet = async () => {
     try {
-      // Disconnect from Phantom wallet if present
-      if (window.solana && window.solana.isConnected) {
-        try {
-          await window.solana.disconnect();
-          console.log("Disconnected from Phantom wallet");
-        } catch (err) {
-          console.error("Error disconnecting from Phantom:", err);
-        }
+      if (window.solana && window.solana.isPhantom) {
+        const response = await window.solana.connect();
+        const address = response.publicKey.toString();
+        
+        sessionStorage.setItem('walletAddress', address);
+        sessionStorage.setItem('walletType', 'phantom');
+        
+        setWalletAddress(address);
+        setWalletType('phantom');
+        
+        await fetchUserProfile(address);
+        return true;
+      } else {
+        alert('Phantom wallet not found. Please install it from https://phantom.app/');
+        return false;
       }
-
-      // Disconnect from MetaMask if present (Note: MetaMask doesn't have a direct disconnect method)
-      if (window.ethereum && window.ethereum.isMetaMask) {
-        console.log("Note: MetaMask doesn't support programmatic disconnect");
-        // We can still clear our app's connection records
-      }
-
-      // Clear local storage
-      localStorage.removeItem('phantomWalletAddress');
-      localStorage.removeItem('metamaskWalletAddress');
-      localStorage.removeItem('walletType');
-
-      // Clear context state
-      setCurrentUser(null);
-      setSpaceBaby(null);
-      setWalletType(null);
-
-      return true;
     } catch (error) {
-      console.error("Error during logout:", error);
+      console.error('Error connecting to Phantom wallet:', error);
       return false;
     }
   };
 
+  // Connect to MetaMask for Polygon
+  const connectMetaMask = async () => {
+    try {
+      if (window.ethereum) {
+        const accounts = await window.ethereum.request({ 
+          method: 'eth_requestAccounts' 
+        });
+        
+        const address = accounts[0];
+        
+        // Request switch to Polygon network
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: '0x89' }], // Polygon Mainnet
+          });
+        } catch (switchError) {
+          // If Polygon is not added, add it
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: 'wallet_addEthereumChain',
+              params: [{
+                chainId: '0x89',
+                chainName: 'Polygon Mainnet',
+                nativeCurrency: {
+                  name: 'MATIC',
+                  symbol: 'MATIC',
+                  decimals: 18
+                },
+                rpcUrls: ['https://polygon-rpc.com/'],
+                blockExplorerUrls: ['https://polygonscan.com/']
+              }]
+            });
+          } else {
+            throw switchError;
+          }
+        }
+        
+        sessionStorage.setItem('walletAddress', address);
+        sessionStorage.setItem('walletType', 'metamask');
+        
+        setWalletAddress(address);
+        setWalletType('metamask');
+        
+        await fetchUserProfile(address);
+        return true;
+      } else {
+        alert('MetaMask not found. Please install it from https://metamask.io/');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error connecting to MetaMask:', error);
+      return false;
+    }
+  };
+
+  const logout = async () => {
+    try {
+      if (walletType === 'phantom' && window.solana) {
+        await window.solana.disconnect();
+      }
+      
+      sessionStorage.removeItem('walletAddress');
+      sessionStorage.removeItem('walletType');
+      sessionStorage.removeItem('currentSpaceBaby');
+      
+      setWalletAddress(null);
+      setWalletType(null);
+      setUser(null);
+      
+      return true;
+    } catch (error) {
+      console.error('Error during logout:', error);
+      return false;
+    }
+  };
+
+  const value = {
+    user,
+    walletAddress,
+    walletType,
+    isLoading,
+    connectPhantomWallet,
+    connectMetaMask,
+    logout
+  };
+
   return (
-    <UserAuthContext.Provider value={{ 
-      currentUser, 
-      setCurrentUser, 
-      loading, 
-      spaceBaby, 
-      setSpaceBaby, 
-      saveUserToDatabase,
-      walletType,
-      logout
-    }}>
+    <UserAuthContext.Provider value={value}>
       {children}
     </UserAuthContext.Provider>
   );
+}
+
+export const useUserAuth = () => {
+  return useContext(UserAuthContext);
 };
-
-export const useUserAuth = () => useContext(UserAuthContext);
-
-export default UserAuthContext;

@@ -115,7 +115,7 @@ const LoadingAnimation = () => {
         const textIndex = Math.floor((prevProgress / 100) * (loadingTexts.length - 1));
         setLoadingText(loadingTexts[textIndex]);
         
-        return prevProgress + 3; // Increased from 1.5 to 3 to make it faster
+        return prevProgress + 7; // Increased from 1.5 to 3 to make it faster
       });
     }, 80); // Reduced from 150ms to 80ms to make it faster
 

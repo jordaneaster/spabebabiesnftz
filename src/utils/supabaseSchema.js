@@ -1,50 +1,94 @@
 /**
- * This file defines the database schema for the Space Babiez app.
- * Use this as a reference for table structure and relationships.
- * 
- * To implement this schema in Supabase:
- * 1. Go to your Supabase project
- * 2. Navigate to SQL Editor
- * 3. Create a new query and paste the SQL below
- * 4. Run the query to create the tables
+ * Supabase schema definitions for Space Babiez Univerze
+ * This file serves as documentation and reference for table structures
  */
 
-/*
-SQL to create tables:
-
--- Users table
-CREATE TABLE IF NOT EXISTS space_baby_users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  wallet_address TEXT NOT NULL UNIQUE,
-  wallet_type TEXT,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
-);
-
--- Space Babies table
-CREATE TABLE IF NOT EXISTS space_babies (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID REFERENCES space_baby_users(id),
-  wallet_address TEXT NOT NULL,
-  name TEXT,
-  image_url TEXT,
-  metadata_uri TEXT,
-  metadata_url TEXT,
-  attributes JSONB,
-  soul_generation_complete BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-  completed_at TIMESTAMP WITH TIME ZONE,
-  transaction_hash TEXT
-);
-
--- Create index on wallet_address for faster lookups
-CREATE INDEX IF NOT EXISTS space_babies_wallet_idx ON space_babies(wallet_address);
-*/
-
-// Helper functions to get schema info
-export const TABLES = {
+const TABLES = {
+  // Users/Guardians table
   USERS: 'space_baby_users',
-  BABIES: 'space_babies'
+  
+  // Space Babies table - add this mapping
+  BABIES: 'space_babies',
+  
+  // NFT data table - updated for space babies
+  NFTS: 'nfts',
+  
+  // NFT attributes/traits - updated for space babies
+  NFT_ATTRIBUTES: 'nft_attributes',
+  
+  // Level progression system
+  LEVELS: 'levels',
+  
+  // Governance proposals
+  GOVERNANCE: 'governance_proposals',
+  
+  // Voting records
+  VOTES: 'votes',
+  
+  // Community treasury and funds
+  COMMUNITY_FUNDS: 'community_funds',
+  
+  // Guardian benefits
+  BENEFITS: 'guardian_benefits',
+  
+  // Community initiatives
+  INITIATIVES: 'initiatives',
+  
+  // NFT staking records
+  STAKING: 'staking',
+  
+  // Rewards for participation
+  REWARDS: 'rewards',
+  
+  // Guardian activity logs
+  ACTIVITIES: 'activities',
+  
+  // Galaxy-specific data
+  GALAXIES: 'galaxies'
+};
+
+/**
+ * Table schema definitions - useful for creating tables if needed
+ */
+const SCHEMA = {
+  // NFT table schema
+  [TABLES.NFTS]: {
+    id: 'uuid primary key default uuid_generate_v4()',
+    user_id: 'uuid references users(id)',
+    nft_id: 'text not null',
+    species: 'text not null',
+    image_url: 'text',
+    pixelated_image_url: 'text',
+    metadata: 'jsonb',
+    created_at: 'timestamptz default now()',
+    updated_at: 'timestamptz default now()'
+  },
+  
+  // NFT attributes table schema
+  [TABLES.NFT_ATTRIBUTES]: {
+    id: 'uuid primary key default uuid_generate_v4()',
+    nft_id: 'uuid references nfts(id)',
+    trait_type: 'text not null',
+    value: 'text not null', 
+    created_at: 'timestamptz default now()'
+  },
+  
+  // Space babies schema
+  [TABLES.BABIES]: {
+    id: 'uuid primary key default uuid_generate_v4()',
+    user_id: 'uuid references space_baby_users(id)',
+    wallet_address: 'text not null',
+    name: 'text',
+    image_url: 'text',
+    metadata_uri: 'text',
+    metadata_url: 'text',
+    attributes: 'jsonb',
+    soul_generation_complete: 'boolean default false',
+    created_at: 'timestamptz default now()',
+    completed_at: 'timestamptz',
+    transaction_hash: 'text'
+  }
 };
 
 export default TABLES;
+export { SCHEMA };

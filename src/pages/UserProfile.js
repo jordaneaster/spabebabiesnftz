@@ -353,7 +353,8 @@ const UserProfile = () => {
         throw profileError;
       }
       
-      // Get all babies associated with this user
+      // Get all babies associated with this user by wallet_address
+      // This ensures we find babies even if they were created without a proper user_id linkage
       const { data: babies, error: babiesError } = await supabase
         .from(TABLES.BABIES)
         .select('*')
@@ -362,20 +363,66 @@ const UserProfile = () => {
         .order('created_at', { ascending: false });
       
       if (babiesError) {
-        console.error("Error fetching user's babies:", babiesError);
+        console.error("Error fetching user's babies by wallet address:", babiesError);
         throw babiesError;
       }
       
-      console.log("Fetched babies for user:", babies?.length || 0);
+      // If no babies found by wallet_address, try looking up by user_id
+      if ((!babies || babies.length === 0) && profile && profile.id) {
+        const { data: userBabies, error: userBabiesError } = await supabase
+          .from(TABLES.BABIES)
+          .select('*')
+          .eq('user_id', profile.id)
+          .eq('soul_generation_complete', true)
+          .order('created_at', { ascending: false });
+        
+        if (userBabiesError) {
+          console.error("Error fetching user's babies by user_id:", userBabiesError);
+        } else if (userBabies && userBabies.length > 0) {
+          console.log("Found babies by user_id:", userBabies.length);
+          // Set babies found by user_id
+          setUserBabies(userBabies.filter(baby => baby.image_url));
+        }
+      } else {
+        console.log("Found babies by wallet_address:", babies?.length || 0);
+        
+        // Set babies found by wallet_address
+        setUserBabies(babies?.filter(baby => baby.image_url) || []);
+      }
+      
+      // Also check session storage for recently minted babies that might not be in the database yet
+      try {
+        const sessionBabies = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
+        if (sessionBabies.length > 0) {
+          console.log("Found babies in session storage:", sessionBabies.length);
+          
+          // Format session babies to match database structure
+          const formattedSessionBabies = sessionBabies.map(baby => ({
+            id: baby.id,
+            name: baby.name,
+            image_url: baby.image,
+            attributes: baby.attributes.reduce((obj, attr) => {
+              obj[attr.trait_type] = attr.value;
+              return obj;
+            }, {}),
+            created_at: baby.mintedAt || new Date().toISOString(),
+            wallet_address: address
+          }));
+          
+          // Combine with existing babies, removing duplicates by ID
+          const existingIds = new Set(userBabies.map(baby => baby.id));
+          const uniqueSessionBabies = formattedSessionBabies.filter(baby => !existingIds.has(baby.id));
+          
+          if (uniqueSessionBabies.length > 0) {
+            setUserBabies(prev => [...prev, ...uniqueSessionBabies]);
+          }
+        }
+      } catch (sessionError) {
+        console.warn("Error checking session storage:", sessionError);
+      }
       
       // If we have a profile, use it, otherwise construct a minimal profile
       setUserProfile(profile || { wallet_address: address });
-      
-      // Filter babies to ensure they have images
-      const validBabies = babies?.filter(baby => baby.image_url) || [];
-      console.log("Valid babies with images:", validBabies.length);
-      
-      setUserBabies(validBabies);
       setIsLoading(false);
     } catch (error) {
       console.error("Error loading profile:", error);

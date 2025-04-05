@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Link } from 'react-router-dom';
 import supabase from '../utils/supabaseConfig';
-import Navigation from './Navigation';
 import Footer from './Footer';
 import bgr from '../assets/media/BGR3.png';
 
@@ -951,7 +950,6 @@ const CommunityHub = () => {
   
   return (
     <>
-      <Navigation />
       <Section style={{ background: `url(${bgr}) no-repeat`, backgroundSize: 'cover' }}>
         <Container>
           <Title>Community Hub</Title>

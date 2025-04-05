@@ -1,82 +1,112 @@
 import { loadSolanaWeb3 } from './solanaWeb3Helper';
 
-// Connect to Phantom wallet
+/**
+ * Connect to Phantom wallet
+ * @returns {Promise<{address: string, type: string}>}
+ */
 export const connectPhantomWallet = async () => {
   if (!window.solana || !window.solana.isPhantom) {
-    throw new Error("Phantom wallet not detected! Please install Phantom extension first.");
+    throw new Error("Phantom wallet not found. Please install the Phantom extension.");
   }
-  
-  // Make sure Solana Web3 is loaded
-  await loadSolanaWeb3();
-  
-  // Connect to Phantom
-  const response = await window.solana.connect();
-  
-  if (response.publicKey) {
-    const publicKeyStr = response.publicKey.toString();
-    
-    // Store wallet info in localStorage
-    localStorage.setItem('phantomWalletAddress', publicKeyStr);
-    localStorage.setItem('walletType', 'phantom');
-    
-    return {
-      address: publicKeyStr,
-      type: 'phantom'
-    };
+
+  try {
+    // Check if Phantom is connected, if not, connect
+    if (!window.solana.isConnected) {
+      const response = await window.solana.connect();
+      if (!response.publicKey) {
+        throw new Error("No public key returned from Phantom.");
+      }
+      
+      return {
+        address: response.publicKey.toString(),
+        type: 'phantom'
+      };
+    } else {
+      // If already connected, just get the public key
+      const publicKey = window.solana.publicKey;
+      if (!publicKey) {
+        throw new Error("No public key available from Phantom.");
+      }
+      
+      return {
+        address: publicKey.toString(),
+        type: 'phantom'
+      };
+    }
+  } catch (error) {
+    console.error("Error in connectPhantomWallet:", error);
+    throw new Error(error.message || "Failed to connect to Phantom wallet");
   }
-  
-  throw new Error("Failed to connect to Phantom wallet.");
 };
 
-// Connect to MetaMask wallet
+/**
+ * Connect to MetaMask wallet
+ * @returns {Promise<{address: string, type: string}>}
+ */
 export const connectMetaMaskWallet = async () => {
   if (!window.ethereum || !window.ethereum.isMetaMask) {
-    throw new Error("MetaMask not detected! Please install MetaMask extension first.");
+    throw new Error("MetaMask not found. Please install the MetaMask extension.");
   }
   
   try {
     // Request account access
-    const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
+    const accounts = await window.ethereum.request({ 
+      method: 'eth_requestAccounts' 
+    });
     
-    if (accounts && accounts.length > 0) {
-      const address = accounts[0];
-      
-      // Store wallet info in localStorage
-      localStorage.setItem('metamaskWalletAddress', address);
-      localStorage.setItem('walletType', 'metamask');
-      
-      return {
-        address: address,
-        type: 'metamask'
-      };
-    } else {
-      throw new Error("No accounts found.");
+    if (!accounts || accounts.length === 0) {
+      throw new Error("No accounts found in MetaMask.");
     }
+    
+    return {
+      address: accounts[0],
+      type: 'metamask'
+    };
   } catch (error) {
-    console.error("Error connecting to MetaMask:", error);
-    throw new Error("Failed to connect to MetaMask: " + error.message);
+    console.error("Error in connectMetaMaskWallet:", error);
+    throw new Error(error.message || "Failed to connect to MetaMask");
   }
 };
 
-// Get the active wallet type and address
-export const getActiveWallet = () => {
-  const phantomAddress = localStorage.getItem('phantomWalletAddress');
-  const metamaskAddress = localStorage.getItem('metamaskWalletAddress');
-  const walletType = localStorage.getItem('walletType');
-  
-  if (walletType === 'phantom' && phantomAddress) {
-    return {
-      address: phantomAddress,
-      type: 'phantom'
-    };
+/**
+ * Check if a wallet is connected
+ * @returns {Promise<{connected: boolean, address: string|null, type: string|null}>}
+ */
+export const checkWalletConnection = async () => {
+  // Check Phantom
+  if (window.solana && window.solana.isPhantom) {
+    try {
+      if (window.solana.isConnected && window.solana.publicKey) {
+        return {
+          connected: true,
+          address: window.solana.publicKey.toString(),
+          type: 'phantom'
+        };
+      }
+    } catch (error) {
+      console.error("Error checking Phantom connection:", error);
+    }
   }
   
-  if (walletType === 'metamask' && metamaskAddress) {
-    return {
-      address: metamaskAddress,
-      type: 'metamask'
-    };
+  // Check MetaMask
+  if (window.ethereum && window.ethereum.isMetaMask) {
+    try {
+      const accounts = await window.ethereum.request({ method: 'eth_accounts' });
+      if (accounts && accounts.length > 0) {
+        return {
+          connected: true,
+          address: accounts[0],
+          type: 'metamask'
+        };
+      }
+    } catch (error) {
+      console.error("Error checking MetaMask connection:", error);
+    }
   }
   
-  return null;
+  return {
+    connected: false,
+    address: null,
+    type: null
+  };
 };

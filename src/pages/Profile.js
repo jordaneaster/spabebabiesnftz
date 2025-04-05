@@ -3,6 +3,7 @@ import styled from 'styled-components';
 import { Link } from 'react-router-dom';
 import { getSolanaNFTs } from '../utils/solanaUtils';
 import { SOLANA_TESTNET } from '../utils/constants';
+import supabase from '../utils/supabaseConfig';
 
 // Styled components
 const ProfileContainer = styled.div`
@@ -286,11 +287,54 @@ const Profile = () => {
   const [walletAddress, setWalletAddress] = useState('');
   const [collection, setCollection] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [user, setUser] = useState(null);
   
   useEffect(() => {
-    // Check if wallet is connected and load NFTs
+    // Check if user is logged in and load NFTs
     const loadProfile = async () => {
       setLoading(true);
+      
+      // Check if user is authenticated with Supabase
+      const { data: { session } } = await supabase.auth.getSession();
+      const currentUser = session?.user;
+      
+      if (currentUser) {
+        setUser(currentUser);
+        
+        // Fetch user's space babies from Supabase
+        try {
+          const { data: dbNFTs, error } = await supabase
+            .from('nfts')
+            .select('*, nft_attributes(*)')
+            .eq('user_id', currentUser.id);
+          
+          if (error) {
+            console.error('Error fetching NFTs from Supabase:', error);
+          } else if (dbNFTs?.length > 0) {
+            // Transform Supabase NFT data to match the expected format
+            const formattedNFTs = dbNFTs.map(nft => ({
+              id: nft.nft_id || nft.id,
+              name: nft.metadata?.name || 'Space Baby',
+              image: nft.image_url || nft.metadata?.image,
+              attributes: nft.metadata?.attributes || nft.nft_attributes?.map(attr => ({
+                trait_type: attr.trait_type,
+                value: attr.value
+              })) || [],
+              mintedAt: nft.created_at || new Date().toISOString(),
+              network: 'solana'
+            }));
+            
+            // Set the formatted NFTs as part of the collection
+            setCollection(prevCollection => {
+              // Combine and deduplicate
+              const allNFTs = [...prevCollection, ...formattedNFTs];
+              return Array.from(new Map(allNFTs.map(nft => [nft.id, nft])).values());
+            });
+          }
+        } catch (dbError) {
+          console.error('Error processing database NFTs:', dbError);
+        }
+      }
       
       // Try to get wallet address from localStorage first
       const storedAddress = localStorage.getItem('phantomWalletAddress');
@@ -303,9 +347,9 @@ const Profile = () => {
           // Combine NFTs from various sources
           const storedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
           const localNFTs = JSON.parse(localStorage.getItem('mintedSolanaNFTs') || '[]').map(nft => ({
-            id: nft.mint || `solana-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+            id: nft.mint || nft.id || `solana-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
             name: nft.metadata?.name || 'Space Baby NFT',
-            image: nft.metadata?.image || 'https://i.postimg.cc/GmQ6XVFR/image-Team-Dez.png',
+            image: nft.metadata?.image || nft.image || 'https://i.postimg.cc/GmQ6XVFR/image-Team-Dez.png',
             attributes: nft.metadata?.attributes || [],
             mintedAt: nft.timestamp ? new Date(nft.timestamp).toISOString() : new Date().toISOString(),
             network: 'solana',
@@ -316,10 +360,13 @@ const Profile = () => {
           const allNFTs = [...storedNFTs, ...localNFTs];
           const uniqueNFTs = Array.from(new Map(allNFTs.map(nft => [nft.id, nft])).values());
           
-          setCollection(uniqueNFTs);
+          setCollection(prevCollection => {
+            // Combine with any NFTs already loaded from Supabase
+            const combined = [...prevCollection, ...uniqueNFTs];
+            return Array.from(new Map(combined.map(nft => [nft.id, nft])).values());
+          });
         } catch (error) {
           console.error('Error loading NFTs:', error);
-          setCollection([]);
         }
       } else {
         // Try to connect to phantom if available
@@ -337,7 +384,6 @@ const Profile = () => {
           } catch (error) {
             console.log("Wallet not previously authorized");
             setWalletAddress('');
-            setCollection([]);
           }
         }
       }

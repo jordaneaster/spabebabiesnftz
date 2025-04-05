@@ -4,7 +4,6 @@ import UniverseNavigation from '../components/UniverseNavigation';
 import GuardianDashboard from '../components/GuardianDashboard';
 import CommunityHub from '../components/CommunityHub';
 import bgr from '../assets/media/BGR3.png';
-import Navigation from '../components/Navigation';
 import Footer from '../components/Footer';
 
 const Section = styled.section`
@@ -160,7 +159,6 @@ const DashboardPage = () => {
   
   return (
     <>
-      <Navigation />
       <Section>
         <Container>
           <Title>Space Babiez Guardian Portal</Title>

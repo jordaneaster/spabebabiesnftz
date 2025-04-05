@@ -502,9 +502,10 @@ const NFTImage = styled.div`
   transform: translate(-50%, -50%);
   
   img {
-    width: 90%;
-    height: 90%;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 50%; /* Ensures the image itself is rounded */
     position: absolute;
     top: 50%;
     left: 50%;

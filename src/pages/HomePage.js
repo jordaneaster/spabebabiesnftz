@@ -2,10 +2,10 @@ import React, { useState, useEffect } from 'react';
 import styled, { keyframes } from 'styled-components';
 import { Link, useNavigate } from 'react-router-dom';
 import { useUserAuth } from '../context/UserAuthContext';
-import { connectPhantomWallet, connectMetaMaskWallet } from '../utils/walletUtils';
+import { connectPhantomWallet } from '../utils/walletUtils';
+import { supabase } from '../utils/supabaseClient'; // Add this import
 
-// Marketing Components
-import Navigation from "../components/Navigation";
+// Marketing Components - removed Navigation import
 import About from "../components/sections/About";
 import Rm from "../components/sections/Rm";
 import Home from "../components/sections/Home";
@@ -307,7 +307,7 @@ const WalletTypeTag = styled.span`
   position: absolute;
   top: -10px;
   right: 10px;
-  background: ${props => props.type === 'phantom' ? '#8A2BE2' : '#F6851B'};
+  background: #8A2BE2;
   color: white;
   font-size: 0.7rem;
   padding: 0.2rem 0.5rem;
@@ -320,50 +320,183 @@ const HomePage = () => {
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [connecting, setConnecting] = useState(false);
+  const [connectionError, setConnectionError] = useState(null);
   const navigate = useNavigate();
   const { currentUser, spaceBaby, loading, saveUserToDatabase, walletType, logout } = useUserAuth();
 
+  // Implement local saveUserToDatabase function as fallback
+  const saveUserToDatabaseLocal = async (address, type) => {
+    try {
+      console.log(`Saving user with wallet address: ${address} and type: ${type}`);
+      
+      // Check if supabase client is properly initialized
+      if (!supabase) {
+        console.error("Supabase client is not initialized");
+        throw new Error("Database connection not available");
+      }
+      
+      // First check if user exists
+      console.log("Checking if user exists in database...");
+      const { data: existingUser, error: fetchError } = await supabase
+        .from('space_baby_users')
+        .select('*')
+        .eq('wallet_address', address)
+        .single();
+      
+      if (fetchError) {
+        if (fetchError.code === 'PGRST116') { // PGRST116 is "no rows returned" error
+          console.log("No existing user found, will create new user");
+        } else {
+          console.error("Error checking for existing user:", fetchError);
+          throw new Error(`Database query failed: ${fetchError.message}`);
+        }
+      }
+      
+      if (existingUser) {
+        // Update existing user
+        console.log("Found existing user, updating...");
+        const { error: updateError } = await supabase
+          .from('space_baby_users')
+          .update({ 
+            last_login: new Date().toISOString(), // Use ISO string format for dates
+            wallet_type: type 
+          })
+          .eq('wallet_address', address);
+        
+        if (updateError) {
+          console.error("Error updating user:", updateError);
+          throw new Error(`Failed to update user data: ${updateError.message}`);
+        }
+        
+        console.log("User updated successfully");
+        return existingUser;
+      } else {
+        // Create new user
+        console.log("Creating new user...");
+        const newUserData = { 
+          wallet_address: address, 
+          wallet_type: type,
+          created_at: new Date().toISOString(), // Use ISO string format for dates
+          last_login: new Date().toISOString()
+        };
+        
+        console.log("New user data:", newUserData);
+        
+        const { data: newUser, error: insertError } = await supabase
+          .from('space_baby_users')
+          .insert([newUserData]);
+        
+        if (insertError) {
+          console.error("Error creating user:", insertError);
+          throw new Error(`Failed to create new user: ${insertError.message}`);
+        }
+        
+        console.log("New user created successfully:", newUser);
+        return newUser;
+      }
+    } catch (error) {
+      console.error("Error in saveUserToDatabaseLocal:", error);
+      throw error;
+    }
+  };
+
   // Check if wallet is already connected on page load
   useEffect(() => {
-    if (currentUser && currentUser.wallet_address) {
-      setWalletConnected(true);
-      setWalletAddress(currentUser.wallet_address);
-    }
+    const checkWalletConnection = async () => {
+      // Only check for Phantom wallet connection if user is not logged out
+      if (!localStorage.getItem('walletDisconnected')) {
+        // Check for Phantom connection
+        if (window.solana && window.solana.isPhantom) {
+          try {
+            const response = await window.solana.connect({ onlyIfTrusted: true });
+            if (response.publicKey) {
+              const address = response.publicKey.toString();
+              setWalletConnected(true);
+              setWalletAddress(address);
+            }
+          } catch (error) {
+            // Silent fail if not auto-connected
+          }
+        }
+      }
+      
+      // Check against currentUser from context
+      if (currentUser && currentUser.wallet_address) {
+        setWalletConnected(true);
+        setWalletAddress(currentUser.wallet_address);
+      }
+    };
+    
+    checkWalletConnection();
   }, [currentUser]);
+
+  // Add event listeners for wallet connection changes
+  useEffect(() => {
+    // Listen for Phantom wallet connection changes
+    if (window.solana) {
+      const handlePhantomAccountChange = () => {
+        // Force update connection state
+        if (!localStorage.getItem('walletDisconnected')) {
+          window.location.reload();
+        }
+      };
+      
+      window.solana.on('accountChanged', handlePhantomAccountChange);
+      window.solana.on('disconnect', () => {
+        setWalletConnected(false);
+        setWalletAddress('');
+      });
+      
+      return () => {
+        // Remove event listeners
+        if (window.solana) {
+          window.solana.off('accountChanged', handlePhantomAccountChange);
+        }
+      };
+    }
+  }, []);
 
   // Connect to Phantom wallet
   const handleConnectPhantom = async () => {
+    // Clear disconnected flag
+    localStorage.removeItem('walletDisconnected');
+    
     setConnecting(true);
+    setConnectionError(null);
     
     try {
       const wallet = await connectPhantomWallet();
+      
+      if (!wallet || !wallet.address) {
+        throw new Error("Failed to connect to Phantom wallet. No address returned.");
+      }
+      
       setWalletConnected(true);
       setWalletAddress(wallet.address);
       
-      // Register or update user in database
-      await saveUserToDatabase(wallet.address, wallet.type);
+      // Try to save to database
+      try {
+        if (typeof saveUserToDatabase === 'function') {
+          console.log("Using context saveUserToDatabase function");
+          await saveUserToDatabase(wallet.address, 'phantom');
+        } else {
+          console.log("Using local saveUserToDatabaseLocal function");
+          await saveUserToDatabaseLocal(wallet.address, 'phantom');
+        }
+        
+        console.log("User data saved successfully, reloading page");
+        // Force reload to ensure context is updated
+        window.location.reload();
+      } catch (dbError) {
+        console.error("Failed to save user to database:", dbError);
+        alert(`Wallet connected but failed to save user data: ${dbError.message}. Check console for details.`);
+        // Don't reload the page on error - allow user to see the error in console
+      }
     } catch (error) {
       console.error("Error connecting to Phantom:", error);
+      setConnectionError(error.message || "Failed to connect to Phantom wallet.");
+      setWalletConnected(false);
       alert(error.message || "Failed to connect to Phantom wallet.");
-    } finally {
-      setConnecting(false);
-    }
-  };
-  
-  // Connect to MetaMask wallet
-  const handleConnectMetaMask = async () => {
-    setConnecting(true);
-    
-    try {
-      const wallet = await connectMetaMaskWallet();
-      setWalletConnected(true);
-      setWalletAddress(wallet.address);
-      
-      // Register or update user in database
-      await saveUserToDatabase(wallet.address, wallet.type);
-    } catch (error) {
-      console.error("Error connecting to MetaMask:", error);
-      alert(error.message || "Failed to connect to MetaMask.");
     } finally {
       setConnecting(false);
     }
@@ -371,6 +504,20 @@ const HomePage = () => {
   
   // Handle logout
   const handleLogout = async () => {
+    // Set a flag to prevent auto-reconnection
+    localStorage.setItem('walletDisconnected', 'true');
+    
+    // Disconnect from Phantom wallet if it exists
+    if (window.solana && window.solana.isPhantom) {
+      try {
+        await window.solana.disconnect();
+        console.log("Disconnected from Phantom wallet");
+      } catch (error) {
+        console.error("Error disconnecting from Phantom:", error);
+      }
+    }
+    
+    // Call the context logout function
     const success = await logout();
     if (success) {
       setWalletConnected(false);
@@ -423,8 +570,8 @@ const HomePage = () => {
         
         <WalletStatus connected={true}>
           <h3>Wallet Connected</h3>
-          <WalletTypeTag type={walletType || 'phantom'}>
-            {walletType || 'Phantom'}
+          <WalletTypeTag type="phantom">
+            Phantom
           </WalletTypeTag>
           <p>Address: <Address>
             {walletAddress.substring(0, 8)}...{walletAddress.substring(walletAddress.length - 8)}
@@ -462,30 +609,40 @@ const HomePage = () => {
             <BabyImage src="https://i.postimg.cc/GmQ6XVFR/image-Team-Dez.png" alt="Space Baby" />
           </BabyImageContainer>
           
-          <WalletStatus connected={false}>
-            <h3>Wallet Not Connected</h3>
-            <p>Connect your wallet to get started</p>
+          <WalletStatus connected={walletConnected}>
+            <h3>{walletConnected ? "Wallet Connected" : "Wallet Not Connected"}</h3>
+            {connectionError && <p style={{ color: '#FF5252' }}>{connectionError}</p>}
+            {walletConnected && walletAddress ? (
+              <p>Address: <Address>
+                {walletAddress.substring(0, 8)}...{walletAddress.substring(walletAddress.length - 8)}
+              </Address></p>
+            ) : (
+              <p>Connect your wallet to get started</p>
+            )}
           </WalletStatus>
           
           <WalletButtonsContainer>
             <Button 
               $primary 
               onClick={handleConnectPhantom} 
-              disabled={connecting}
+              disabled={connecting || walletConnected}
               style={{ background: connecting ? 'gray' : 'linear-gradient(90deg, #9945FF, #14F195)' }}
             >
-              {connecting ? "Connecting..." : "Connect Phantom Wallet"}
-            </Button>
-            
-            <Button 
-              $primary={false}
-              onClick={handleConnectMetaMask} 
-              disabled={connecting}
-              style={{ borderColor: '#F6851B', color: '#F6851B' }}
-            >
-              {connecting ? "Connecting..." : "Connect MetaMask"}
+              {connecting ? "Connecting..." : walletConnected ? "Connected to Phantom" : "Connect Phantom Wallet"}
             </Button>
           </WalletButtonsContainer>
+          
+          {walletConnected && !currentUser && (
+            <div style={{ marginTop: '20px', color: '#AEFF00' }}>
+              <p>Wallet connected! Refreshing page to update your profile...</p>
+              <Button 
+                onClick={() => window.location.reload()} 
+                style={{ marginTop: '10px', background: '#AEFF00', color: '#000' }}
+              >
+                Refresh Now
+              </Button>
+            </div>
+          )}
         </ContentWrapper>
         
         <MarketingSectionsContainer>
@@ -514,7 +671,7 @@ const HomePage = () => {
 
   return (
     <>
-      {currentUser ? <Navbar /> : <Navigation />}
+      <Navbar />
       <HomeContainer>
         {currentUser ? renderPersonalizedContent() : renderMarketingContent()}
       </HomeContainer>

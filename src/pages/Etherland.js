@@ -10,9 +10,14 @@ import {
   NFT_PRICE_SOL 
 } from '../utils/constants';
 import soulGeneratorImg from '../assets/soul-generator.png';
+// Import the new Space Baby service
+import SpaceBabyService from '../services/SpaceBabyService';
+import supabase from '../utils/supabaseConfig';
 
-// Background image
-const etherlandBg = 'https://i.postimg.cc/L8ZN3HS2/etherland-bg.jpg'; // placeholder URL - replace with actual image
+// Update background image to a valid URL or import directly from assets
+import etherlandBg from '../assets/BGR5.png'; 
+// As fallback, define a solid color background
+const fallbackBgColor = '#0a0a1a';
 
 // Animations
 const pulse = keyframes`
@@ -53,7 +58,7 @@ const breathe = keyframes`
 const Section = styled.section`
   min-height: 100vh;
   width: 100vw;
-  background-color: ${props => props.theme.body};
+  background-color: ${fallbackBgColor}; /* Fallback background color */
   background-image: url(${etherlandBg});
   background-size: cover;
   position: relative;
@@ -628,7 +633,6 @@ const Etherland = () => {
   const [generatorProgress, setGeneratorProgress] = useState(0);
   const [generatorText, setGeneratorText] = useState('Initializing Cryptonic Soul Generator...');
   const [generatorFadeOut, setGeneratorFadeOut] = useState(false);
-  // Remove ethereum-specific states
   const [walletConnected, setWalletConnected] = useState(false);
   const [walletAddress, setWalletAddress] = useState('');
   const [transactionHash, setTransactionHash] = useState('');
@@ -644,8 +648,95 @@ const Etherland = () => {
   const [sufficientFunds, setSufficientFunds] = useState(true);
   const [nftMinted, setNftMinted] = useState(false);
   const [mintedNFT, setMintedNFT] = useState(null);
+  const [generatedSpaceBaby, setGeneratedSpaceBaby] = useState(null);
+  const [userId, setUserId] = useState(null);
+  const [spaceUserId, setSpaceUserId] = useState(null);
   
   const navigate = useNavigate();
+
+  // Get user ID on component mount
+  useEffect(() => {
+    const getUserProfile = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session?.user) {
+        setUserId(session.user.id);
+        
+        // Specifically look for the user in the space_baby_users table
+        const { data: spaceUserData, error: spaceUserError } = await supabase
+          .from('space_baby_users')
+          .select('id, wallet_address')
+          .eq('auth_user_id', session.user.id)
+          .single();
+        
+        if (!spaceUserError && spaceUserData) {
+          console.log('Found user in space_baby_users table:', spaceUserData);
+          setSpaceUserId(spaceUserData.id);
+          setWalletAddress(spaceUserData.wallet_address || '');
+        } else {
+          console.warn('User not found in space_baby_users table:', spaceUserError);
+          
+          // Fallback: Check if the wallet address is already associated with the user
+          if (walletAddress) {
+            // Try to find or create a space_baby_user with this wallet
+            const { data: userData, error: userError } = await supabase
+              .from('space_baby_users')
+              .select('*')
+              .eq('wallet_address', walletAddress)
+              .single();
+              
+            if (!userError && userData) {
+              setSpaceUserId(userData.id);
+            } else {
+              // Create a new space_baby_user
+              const { data: newUser, error: newUserError } = await supabase
+                .from('space_baby_users')
+                .insert({
+                  auth_user_id: session.user.id,
+                  wallet_address: walletAddress,
+                  created_at: new Date().toISOString()
+                })
+                .select()
+                .single();
+                
+              if (!newUserError && newUser) {
+                setSpaceUserId(newUser.id);
+              } else {
+                console.error('Failed to create space_baby_user:', newUserError);
+              }
+            }
+          }
+        }
+      }
+    };
+    
+    getUserProfile();
+  }, [walletAddress]); // Add walletAddress as dependency to update when connected
+
+  // Ensure proper authentication when component loads
+  useEffect(() => {
+    const ensureAuthentication = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session) {
+        // Try to create an anonymous session for API access
+        try {
+          const { data: { session: anonSession }, error: authError } = await supabase.auth.signInAnonymously();
+          
+          if (authError) {
+            console.warn("Could not create anonymous session:", authError);
+          } else {
+            console.log("Anonymous session created for API access");
+          }
+        } catch (error) {
+          console.error("Authentication error:", error);
+        }
+      } else {
+        console.log("User already authenticated");
+      }
+    };
+    
+    ensureAuthentication();
+  }, []);
 
   // Keep the updateProgress function
   const updateProgress = (start, end, duration) => {
@@ -794,7 +885,7 @@ const Etherland = () => {
     // Set an initial progress immediately before the interval
     setGeneratorProgress(5);
     const interval = setInterval(() => {
-      progress += 3;
+      progress += 13;
       // Ensure progress never exceeds 100% and use whole numbers for visual consistency
       const cappedProgress = Math.min(Math.max(Math.floor(progress), 1), 100);
       setGeneratorProgress(cappedProgress);
@@ -829,13 +920,140 @@ const Etherland = () => {
     }, 80);
   };
 
-  // Modified completeSoulGeneration function - ensure it saves the NFT info
+  // Updated prepareForMinting function to use the remote service
+  const prepareForMinting = async () => {
+    setStatusMessage("Preparing your Space Baby for minting...");
+    updateProgress(75, 85, 2000);
+    
+    try {
+      if (!walletConnected) {
+        throw new Error("Wallet not connected. Please connect your wallet to mint.");
+      }
+      
+      if (!sufficientFunds) {
+        throw new Error(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
+      }
+      
+      setStatusMessage("Beginning minting process...");
+      setIsMinting(true);
+      
+      // Use the selected traits to generate a Space Baby
+      const traits = selectedTraits.map(trait => ({
+        name: trait.name,
+        description: trait.description
+      }));
+      
+      // Generate Space Baby using the remote service
+      setMintStatus('Generating your Space Baby...');
+      const spaceBaby = await SpaceBabyService.generateRemoteSpaceBaby({
+        traits: traits,
+        species: 'random'
+      });
+      
+      // Store the generated space baby
+      setGeneratedSpaceBaby(spaceBaby);
+      
+      // Mint the NFT on Solana
+      setMintStatus('Minting your Space Baby on Solana...');
+      const result = await mintSolanaNFT(walletAddress, spaceBaby.metadata, SOLANA_TESTNET);
+      setTransactionHash(result.signature);
+      
+      // Add transaction hash to the space baby
+      spaceBaby.transactionHash = result.signature;
+      
+      // Save the minted NFT info
+      const mintedNFTData = {
+        id: result.mint || spaceBaby.id,
+        name: spaceBaby.metadata?.name || spaceBaby.name,
+        image: spaceBaby.image,
+        attributes: spaceBaby.attributes,
+        mintedAt: new Date().toISOString(),
+        network: 'solana',
+        transactionHash: result.signature
+      };
+      setMintedNFT(mintedNFTData);
+      
+      // Try to save to database, but don't let errors block progression
+      try {
+        // Save to database using the remote service
+        setMintStatus('Saving your Space Baby to the database...');
+        await SpaceBabyService.saveSpaceBabyToDb(spaceBaby, {
+          walletAddress: walletAddress,
+          transactionHash: result.signature
+        });
+        setMintStatus('Space Baby saved successfully!');
+      } catch (saveError) {
+        console.error("Error saving to database:", saveError);
+        setMintStatus("NFT minted, but there was an issue saving to database. Your NFT is still safe!");
+        
+        // Save to local storage as backup
+        try {
+          const backupBabies = JSON.parse(localStorage.getItem('spaceBabiesBackup') || '[]');
+          backupBabies.push({
+            ...spaceBaby,
+            walletAddress,
+            transactionHash: result.signature,
+            error: saveError.message,
+            timestamp: new Date().toISOString()
+          });
+          localStorage.setItem('spaceBabiesBackup', JSON.stringify(backupBabies));
+          console.log('Space baby saved to local backup');
+        } catch (backupError) {
+          console.error('Failed to save backup:', backupError);
+        }
+      }
+      
+      // Save to session storage for viewing in Astroverse
+      try {
+        // Save to the collection
+        const savedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
+        savedNFTs.push(mintedNFTData);
+        sessionStorage.setItem('spaceBabiesNFTs', JSON.stringify(savedNFTs));
+        
+        // Save as current NFT for immediate reference
+        sessionStorage.setItem('currentSpaceBaby', JSON.stringify(mintedNFTData));
+        
+        // Also save wallet address for reference in other pages
+        sessionStorage.setItem('walletAddress', walletAddress);
+      } catch (err) {
+        console.warn('Error saving NFT to sessionStorage:', err);
+      }
+      
+      setNftMinted(true);
+      setMintStatus('NFT minted successfully!');
+      updateProgress(85, 95, 1000);
+      
+      // Move to final stage
+      setTimeout(() => {
+        setGenerationStage(5);
+        completeSoulGeneration();
+      }, 1000);
+    } catch (error) {
+      console.error("Error preparing for minting:", error);
+      setStatusMessage("Failed to mint: " + (error.message || 'Unknown error'));
+      setMintingError(error.message || 'Failed to mint your NFT');
+      setIsGenerating(false);
+      setIsMinting(false);
+    }
+  };
+
+  // Updated completeSoulGeneration function
   const completeSoulGeneration = () => {
     setSoulProgress(100);
     
     // Save NFT data to session storage for Astroverse display
     if (mintedNFT) {
       sessionStorage.setItem('currentSpaceBaby', JSON.stringify(mintedNFT));
+      
+      // Also save locally for Profile page
+      const storedNFTs = JSON.parse(localStorage.getItem('mintedSolanaNFTs') || '[]');
+      storedNFTs.push({
+        ...mintedNFT,
+        timestamp: new Date().toISOString(),
+        signature: mintedNFT.transactionHash,
+        metadata: mintedNFT
+      });
+      localStorage.setItem('mintedSolanaNFTs', JSON.stringify(storedNFTs));
     }
     
     // Run loading animation
@@ -966,118 +1184,10 @@ const Etherland = () => {
     }
   };
 
-  // Modified prepareForMinting - only for Solana/Phantom
-  const prepareForMinting = async () => {
-    setStatusMessage("Preparing your Space Baby for minting...");
-    updateProgress(75, 85, 2000);
-    
-    try {
-      if (!walletConnected) {
-        throw new Error("Wallet not connected. Please connect your wallet to mint.");
-      }
-      
-      if (!sufficientFunds) {
-        throw new Error(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
-      }
-      
-      setStatusMessage("Beginning minting process...");
-      setIsMinting(true);
-      
-      // Prepare metadata
-      const metadata = {
-        name: `Space Baby #${Math.floor(Math.random() * 10000)}`,
-        description: "A unique Space Baby from the Etherland metaverse",
-        image: "https://i.postimg.cc/GmQ6XVFR/image-Team-Dez.png", // Default image or dynamic one
-        attributes: nftAttributes ? Object.entries(nftAttributes).map(([trait_type, value]) => ({
-          trait_type,
-          value
-        })) : []
-      };
-      
-      // Mint the NFT on Solana
-      setMintStatus('Minting your Space Baby on Solana...');
-      const result = await mintSolanaNFT(walletAddress, metadata, SOLANA_TESTNET);
-      setTransactionHash(result.signature);
-      
-      // Save the minted NFT info
-      const mintedNFTData = {
-        id: result.mint,
-        name: metadata.name,
-        image: metadata.image,
-        attributes: metadata.attributes,
-        mintedAt: new Date().toISOString(),
-        network: 'solana',
-        transactionHash: result.signature
-      };
-      setMintedNFT(mintedNFTData);
-      
-      // Save to session storage for viewing in Astroverse
-      try {
-        // Save to the collection
-        const savedNFTs = JSON.parse(sessionStorage.getItem('spaceBabiesNFTs') || '[]');
-        savedNFTs.push(mintedNFTData);
-        sessionStorage.setItem('spaceBabiesNFTs', JSON.stringify(savedNFTs));
-        
-        // Save as current NFT for immediate reference
-        sessionStorage.setItem('currentSpaceBaby', JSON.stringify(mintedNFTData));
-      } catch (err) {
-        console.warn('Error saving NFT to sessionStorage:', err);
-      }
-      
-      setNftMinted(true);
-      setMintStatus('NFT minted successfully!');
-      updateProgress(85, 95, 1000);
-      
-      // Move to final stage
-      setTimeout(() => {
-        setGenerationStage(5);
-        completeSoulGeneration();
-      }, 1000);
-    } catch (error) {
-      console.error("Error preparing for minting:", error);
-      setStatusMessage("Failed to mint: " + (error.message || 'Unknown error'));
-      setMintingError(error.message || 'Failed to mint your NFT');
-      setIsGenerating(false);
-      setIsMinting(false);
-    }
-  };
-
-  // Check wallet balance when address changes
-  useEffect(() => {
-    if (walletAddress) {
-      const checkBalance = async () => {
-        try {
-          const balance = await getSolanaBalance(walletAddress);
-          setSufficientFunds(balance >= NFT_PRICE_SOL);
-          if (balance < NFT_PRICE_SOL) {
-            setMintingError(`Insufficient funds. You need at least ${NFT_PRICE_SOL} SOL to mint.`);
-          } else {
-            setMintingError('');
-          }
-        } catch (error) {
-          console.error("Error checking wallet balance:", error);
-        }
-      };
-      
-      checkBalance();
-    }
-  }, [walletAddress]);
-
-  // Check wallet connection on component mount
-  useEffect(() => {
-    loadSolanaWeb3().then(() => {
-      checkWalletConnection();
-    }).catch(err => {
-      console.error("Failed to load Solana Web3:", err);
-      // Try to proceed anyway
-      checkWalletConnection();
-    });
-  }, []);
-
-  // Modified NFTSimulationNotice - for Phantom only
+  // Updated NFTSimulationNotice component to display generated space baby
   const NFTSimulationNotice = ({ transactionHash }) => {
     const viewMockNFTs = () => {
-      const mintedNFTs = JSON.parse(localStorage.getItem('mintedSolanaNFTs') || '[]');
+      const mintedNFTs = JSON.parse(localStorage.getItem('spaceBabiesBackup') || '[]');
       alert(`You have ${mintedNFTs.length} Space Babies. In a production environment, these would appear in your Phantom wallet.`);
       console.table(mintedNFTs);
     };
@@ -1085,11 +1195,30 @@ const Etherland = () => {
     return (
       <SimulatedNFTInfo>
         <h4 style={{ color: '#aeff00', margin: '0 0 0.5rem 0' }}>Space Baby Generated!</h4>
+        {generatedSpaceBaby && (
+          <div style={{ marginBottom: '10px' }}>
+            <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '10px' }}>
+              <img 
+                src={generatedSpaceBaby.image} 
+                alt="Generated Space Baby" 
+                style={{ 
+                  maxWidth: '150px', 
+                  maxHeight: '150px', 
+                  borderRadius: '10px',
+                  border: '2px solid #aeff00'
+                }} 
+              />
+            </div>
+            <p style={{ fontSize: '1rem', margin: '0.5rem 0', color: '#aeff00' }}>
+              {generatedSpaceBaby.metadata?.name || 'Space Baby'}
+            </p>
+            <p style={{ fontSize: '0.8rem', margin: '0.5rem 0', color: '#fff' }}>
+              Species: {generatedSpaceBaby.species}
+            </p>
+          </div>
+        )}
         <p style={{ fontSize: '0.9rem', margin: '0.5rem 0' }}>
           Your Space Baby has been minted and added to your collection.
-        </p>
-        <p style={{ fontSize: '0.9rem', margin: '0.5rem 0' }}>
-          In development mode, your NFT is saved locally. In production, it would appear in your Phantom wallet.
         </p>
         {transactionHash && (
           <p style={{ fontSize: '0.9rem', margin: '0.5rem 0', color: '#aeff00' }}>
